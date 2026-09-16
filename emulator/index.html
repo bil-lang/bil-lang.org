@@ -39,10 +39,6 @@
     background:var(--bg-raised); color:var(--ink); border:1px solid var(--rule-strong);
     padding:.3rem .4rem; border-radius:2px;
   }
-  .controls input[type="range"]{
-    width:12rem; vertical-align:middle; accent-color:var(--accent);
-  }
-  #hopValue{font-family:var(--font-mono); font-size:.8rem; color:var(--ink-dim);}
   .controls button{
     font-family:var(--font-mono); font-size:.85rem; font-weight:600;
     background:var(--accent); color:var(--accent-ink); border:none;
@@ -68,6 +64,17 @@
     font-size:.62rem; line-height:1.35; color:var(--ink-dim);
     white-space:pre-wrap; word-break:break-word; flex:1;
   }
+  #sourceWrap{margin-top:2rem;}
+  #sourceWrap h2{
+    font-family:var(--font-head); font-weight:700; font-size:1.1rem;
+    margin:0 0 .5rem; color:var(--ink);
+  }
+  #sourceWrap p{margin:0 0 .6rem; font-size:.8rem; color:var(--ink-faint);}
+  #sourceCode{
+    display:block; background:var(--bg-raised); border:1px solid var(--rule);
+    border-radius:3px; padding:1rem; font-size:.72rem; line-height:1.5;
+    color:var(--ink-dim); overflow-x:auto; white-space:pre;
+  }
 </style>
 </head>
 <body>
@@ -90,13 +97,16 @@
   <label>cols <input id="colsInput" type="number" min="1" max="10" value="7"></label>
   <button id="startBtn">Restart grid</button>
 </div>
-<div class="controls">
-  <label>hop time <input id="hopSlider" type="range" min="0" max="400" step="10" value="150"> <span id="hopValue">150ms</span></label>
-</div>
 
 <div id="gridWrap">
   <svg id="linkSvg"></svg>
   <div id="nodeGrid"></div>
+</div>
+
+<div id="sourceWrap">
+  <h2 id="sourceHeading">Source</h2>
+  <p id="sourceDesc"></p>
+  <code id="sourceCode"></code>
 </div>
 
 <script>
@@ -362,7 +372,7 @@
     return w;
   }
 
-  async function startGridLegacy(rows, cols, nodeLinks, hopMs, myGeneration) {
+  async function startGridLegacy(rows, cols, nodeLinks, myGeneration) {
     const coords = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) coords.push([r, c]);
@@ -370,7 +380,7 @@
     for (let i = 0; i < coords.length; i += SPAWN_BATCH_SIZE) {
       if (myGeneration !== spawnGeneration) return; // superseded by a newer restart
       for (const [r, c] of coords.slice(i, i + SPAWN_BATCH_SIZE)) {
-        makeWorker(r, c).postMessage({ row: r, col: c, rows, cols, links: nodeLinks[r][c], hopMs });
+        makeWorker(r, c).postMessage({ row: r, col: c, rows, cols, links: nodeLinks[r][c] });
       }
       if (i + SPAWN_BATCH_SIZE < coords.length) await sleep(SPAWN_BATCH_DELAY_MS);
     }
@@ -385,7 +395,7 @@
   // current program has roles/placement.json (built by bilc's
   // RoleBinaries/PlacementManifest); a program with no placed-par split
   // falls back to startGridLegacy entirely. See README.md.
-  async function startGridCascade(rows, cols, nodeLinks, manifest, base, hopMs, myGeneration) {
+  async function startGridCascade(rows, cols, nodeLinks, manifest, base, myGeneration) {
     const leaves = manifest.leaves;
     const roleNames = [...new Set(leaves.map((l) => l.proc))];
     const roleBytes = {};
@@ -418,7 +428,7 @@
         const bootParentPort = (r === 0 && c === 0) ? hostChannel.port2 : edgeChannel[r][c].port2;
         const bootChildPorts = bootChildCoords(r, c, rows, cols).map(([cr, cc]) => edgeChannel[cr][cc].port1);
         makeWorker(r, c).postMessage(
-          { links: nodeLinks[r][c], bootParentPort, bootChildPorts, hopMs },
+          { links: nodeLinks[r][c], bootParentPort, bootChildPorts },
           [bootParentPort, ...bootChildPorts]
         );
       }
@@ -451,7 +461,6 @@
   async function startGrid(rows, cols) {
     const myGeneration = ++spawnGeneration;
     const base = currentExample().base;
-    const hopMs = parseInt(document.getElementById("hopSlider").value, 10);
 
     workers.forEach((w) => w.terminate());
     workers = [];
@@ -475,9 +484,9 @@
     if (myGeneration !== spawnGeneration) return;
 
     if (manifest) {
-      await startGridCascade(rows, cols, nodeLinks, manifest, base, hopMs, myGeneration);
+      await startGridCascade(rows, cols, nodeLinks, manifest, base, myGeneration);
     } else {
-      await startGridLegacy(rows, cols, nodeLinks, hopMs, myGeneration);
+      await startGridLegacy(rows, cols, nodeLinks, myGeneration);
     }
 
     scheduleDrawLinkLines();
@@ -501,27 +510,35 @@
 
   // Each option is built fresh from bil/examples/<N>-*.bil via bilc + the
   // per-role WASM build steps in ../README.md, vendored here under its
-  // own base/ (roles/*.wasm + roles/placement.json) so the page's own
-  // relative fetches ("roles/X.wasm", "roles/placement.json") just need
-  // a base prefix -- see startGrid/startGridCascade above. "ripple" is
-  // the odd one out: nodeprog/ripple is hand-written Go, not compiled
-  // from a .bil source, and lives at the emulator/ root (no base, no
-  // roles/ -- legacy bootstrap).
+  // own base/ (roles/*.wasm + roles/placement.json + source.bil) so the
+  // page's own relative fetches ("roles/X.wasm", "roles/placement.json",
+  // "source.bil") just need a base prefix -- see startGrid/
+  // startGridCascade above. "ripple" is the odd one out: nodeprog/ripple
+  // is hand-written Go, not compiled from a .bil source, and lives at
+  // the emulator/ root (no base, no roles/ -- legacy bootstrap).
   const EXAMPLES = {
     ripple: {
-      base: "", minRows: 1, defaultRows: 6, defaultCols: 7, defaultHopMs: 150,
+      base: "", minRows: 1, defaultRows: 6, defaultCols: 7,
+      sourceFile: "source.go", sourceLabel: "nodeprog/ripple/main.go",
+      sourceUrl: "https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go",
       desc: 'A counter ripples east along each row, reflects at the last column, and ripples back (<a href="https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go">nodeprog/ripple</a>, hand-written Go -- the substrate proof, not compiled from a .bil source).',
     },
     ex20: {
-      base: "ex20/", minRows: 1, defaultRows: 6, defaultCols: 7, defaultHopMs: 150,
+      base: "ex20/", minRows: 1, defaultRows: 6, defaultCols: 7,
+      sourceFile: "ex20/source.bil", sourceLabel: "examples/20-placed-controller.bil",
+      sourceUrl: "https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil",
       desc: 'A heterogeneous <code>placed par</code>: <code>controller</code>/<code>rowEnd</code>/<code>relay</code> ripple a value along row 0, every other row runs <code>idle</code> (<a href="https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil">examples/20-placed-controller.bil</a>).',
     },
     ex21: {
-      base: "ex21/", minRows: 1, defaultRows: 6, defaultCols: 7, defaultHopMs: 80,
+      base: "ex21/", minRows: 1, defaultRows: 6, defaultCols: 7,
+      sourceFile: "ex21/source.bil", sourceLabel: "examples/21-mesh-transformer.bil",
+      sourceUrl: "https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil",
       desc: 'The same controller/rowEnd/relay/idle placement, now carrying a tiny transformer’s embeddings and attention scores across row 0 (<a href="https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil">examples/21-mesh-transformer.bil</a>).',
     },
     ex22: {
-      base: "ex22/", minRows: 4, defaultRows: 4, defaultCols: 4, defaultHopMs: 60,
+      base: "ex22/", minRows: 4, defaultRows: 4, defaultCols: 4,
+      sourceFile: "ex22/source.bil", sourceLabel: "examples/22-pipeline-transformer.bil",
+      sourceUrl: "https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil",
       desc: 'A tiny transformer pipelined down the mesh’s rows — embed, attention, feed-forward, output — each column computing its own token in parallel (<a href="https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil">examples/22-pipeline-transformer.bil</a>). Needs at least 4 rows.',
     },
   };
@@ -530,13 +547,29 @@
     return EXAMPLES[document.getElementById("exampleSelect").value];
   }
 
+  function escapeHtml(s) {
+    return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  }
+
+  let sourceLoadGeneration = 0;
+  async function loadSource(ex) {
+    const myGeneration = ++sourceLoadGeneration;
+    document.getElementById("sourceHeading").textContent = "Source — " + ex.sourceLabel;
+    document.getElementById("sourceDesc").innerHTML =
+      'View on <a href="' + ex.sourceUrl + '">GitHub</a>.';
+    document.getElementById("sourceCode").textContent = "Loading…";
+    const res = await fetch(ex.sourceFile);
+    const text = await res.text();
+    if (myGeneration !== sourceLoadGeneration) return; // superseded by a newer example switch
+    document.getElementById("sourceCode").innerHTML = escapeHtml(text);
+  }
+
   function updateExampleUI() {
     const ex = currentExample();
     document.getElementById("exampleSub").innerHTML = ex.desc;
     document.getElementById("rowsInput").min = ex.minRows;
     if (clampInput("rowsInput") < ex.minRows) document.getElementById("rowsInput").value = ex.defaultRows;
-    document.getElementById("hopSlider").value = ex.defaultHopMs;
-    document.getElementById("hopValue").textContent = ex.defaultHopMs + "ms";
+    loadSource(ex);
   }
 
   document.getElementById("exampleSelect").addEventListener("change", () => {
@@ -547,14 +580,6 @@
     startGrid(clampInput("rowsInput"), clampInput("colsInput"));
   });
 
-  // hopDelay is read once, at each WASM program's own package-level var
-  // init (see ../README.md's build patch) -- so the slider's value only
-  // takes effect for newly spawned Workers, not ones already running.
-  // The live label still updates on every drag for direct feedback.
-  document.getElementById("hopSlider").addEventListener("input", (e) => {
-    document.getElementById("hopValue").textContent = e.target.value + "ms";
-  });
-
   document.getElementById("startBtn").addEventListener("click", () => {
     const rows = clampInput("rowsInput");
     const cols = clampInput("colsInput");
@@ -563,8 +588,8 @@
 
   window.addEventListener("resize", scheduleDrawLinkLines);
 
-  // ?example=NAME&rows=N&cols=N&hop=N presets the fields and auto-starts
-  // at that configuration -- used by `bil emu` to launch straight at a
+  // ?example=NAME&rows=N&cols=N presets the fields and auto-starts at
+  // that configuration -- used by `bil emu` to launch straight at a
   // size/example it already computed (see tools/bil/gridsize.go in the
   // bil repo), rather than requiring the fields to be set by hand after
   // the page loads. Falls back to each example's own default when
@@ -578,10 +603,6 @@
   const ex0 = currentExample();
   document.getElementById("rowsInput").value = params.get("rows") ?? ex0.defaultRows;
   document.getElementById("colsInput").value = params.get("cols") ?? ex0.defaultCols;
-  if (params.get("hop")) {
-    document.getElementById("hopSlider").value = params.get("hop");
-    document.getElementById("hopValue").textContent = params.get("hop") + "ms";
-  }
   startGrid(clampInput("rowsInput"), clampInput("colsInput"));
 </script>
 </body>
