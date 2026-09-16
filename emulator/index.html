@@ -495,14 +495,11 @@
   // per-role WASM build steps in ../README.md, vendored here under its
   // own base/ (roles/*.wasm + roles/placement.json) so the page's own
   // relative fetches ("roles/X.wasm", "roles/placement.json") just need
-  // a base prefix -- see startGrid/startGridCascade above. "ripple" is
-  // the odd one out: nodeprog/ripple is hand-written Go, not compiled
-  // from a .bil source, and lives at the emulator/ root (no base, no
-  // roles/ -- legacy bootstrap).
+  // a base prefix -- see startGrid/startGridCascade above.
   const EXAMPLES = {
     ripple: {
-      base: "", minRows: 1, defaultRows: 6, defaultCols: 7,
-      desc: 'A counter ripples east along each row, reflects at the last column, and ripples back (<a href="https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go">nodeprog/ripple</a>, hand-written Go -- the substrate proof, not compiled from a .bil source).',
+      base: "ex10/", minRows: 1, defaultRows: 6, defaultCols: 7,
+      desc: 'A counter ripples east along each row, reflects at the last column, and ripples back -- three roles (<code>origin</code>/<code>relay</code>/<code>reflect</code>) wildcarded across every row (<a href="https://github.com/bil-lang/bil/blob/main/examples/10-mesh-ripple.bil">examples/10-mesh-ripple.bil</a>).',
     },
     ex20: {
       base: "ex20/", minRows: 1, defaultRows: 6, defaultCols: 7,
