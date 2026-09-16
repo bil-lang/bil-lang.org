@@ -39,12 +39,20 @@ include:
   - _pages
 
 # Exclude from processing.
-# external/ holds the bil and emulator repos as git submodules (see
-# .gitmodules) -- pulled in explicitly per-page via include_relative,
-# not auto-copied/processed as site content wholesale.
+# A custom exclude: list replaces Jekyll's own defaults rather than
+# extending them, so those defaults (vendor/bundle/ etc. -- where the
+# Actions build's own installed gems live) are repeated here alongside
+# external/, which holds the bil and emulator repos as git submodules
+# (see .gitmodules) -- pulled in explicitly per-page via
+# include_relative, not auto-copied/processed as site content wholesale.
 exclude:
   - Gemfile
   - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
   - external/
 
 # Plugins (previously gems:)
