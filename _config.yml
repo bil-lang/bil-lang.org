@@ -64,10 +64,10 @@ author:
   avatar : "/assets/images/pipeline-mesh.png"
   bio    : "My awesome biography constrained to a sentence or two goes here."
   links:
-    - label: "Bil"
+    - label: "Bil toolchain"
       icon: "fab fa-fw fa-github"
       url: "https://github.com/bil-lang/bil"
-    - label: "Emulator"
+    - label: "Bil emulator"
       icon: "fab fa-fw fa-github"
       url: "https://github.com/bil-lang/emulator"
 
