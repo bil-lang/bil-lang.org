@@ -1,0 +1,6 @@
+[submodule "external/bil"]
+	path = external/bil
+	url = https://github.com/bil-lang/bil.git
+[submodule "external/emulator"]
+	path = external/emulator
+	url = https://github.com/bil-lang/emulator.git

@@ -39,16 +39,13 @@ include:
   - _pages
 
 # Exclude from processing.
-# The following items will not be processed, by default. Create a custom list
-# to override the default setting.
-# exclude:
-#   - Gemfile
-#   - Gemfile.lock
-#   - node_modules
-#   - vendor/bundle/
-#   - vendor/cache/
-#   - vendor/gems/
-#   - vendor/ruby/
+# external/ holds the bil and emulator repos as git submodules (see
+# .gitmodules) -- pulled in explicitly per-page via include_relative,
+# not auto-copied/processed as site content wholesale.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - external/
 
 # Plugins (previously gems:)
 plugins:
