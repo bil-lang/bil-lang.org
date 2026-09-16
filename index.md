@@ -43,7 +43,7 @@ Bil is intended for parallel processor systems, but also efficiently supports si
       wrapper.replaceWith(pre);
     });
     if (window.mermaid) {
-      mermaid.initialize({ startOnLoad: false });
+      mermaid.initialize({ startOnLoad: false, themeVariables: { fontSize: '22px' } });
       mermaid.run({ querySelector: '.mermaid' });
     }
   });
