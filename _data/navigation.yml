@@ -3,3 +3,5 @@ main:
     url: /posts/
   - title: "Getting Started"
     url: /getting-started/
+  - title: "Emulator"
+    url: /emulator/

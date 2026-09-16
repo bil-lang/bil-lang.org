@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script src="coi-serviceworker.js"></script>
+<meta charset="utf-8">
+<title>Bil grid emulator</title>
+<link href="../vendor/fonts/fonts.css" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0C2748; --bg-raised:#11365E; --accent:#D6A428; --accent-ink:#1A1204;
+    --accent-2:#7DD3E8; --ink:#EAF2FA; --ink-dim:#9FC2E0; --ink-faint:#6E93B8;
+    --rule:rgba(234,242,250,.22); --rule-strong:rgba(234,242,250,.4);
+    --font-head:'Rajdhani','Segoe UI',sans-serif;
+    --font-mono:'IBM Plex Mono','SFMono-Regular',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; padding:1.5rem; background:var(--bg); color:var(--ink);
+    font-family:var(--font-mono);
+  }
+  a{color:var(--accent-2);}
+  p.back{margin:0 0 1rem;}
+  p.back a{color:var(--ink-dim); font-size:.85rem; text-decoration:none;}
+  p.back a:hover{color:var(--ink);}
+  h1{
+    font-family:var(--font-head); font-weight:700; font-size:1.6rem;
+    margin:0 0 .3rem; color:var(--ink);
+  }
+  p.sub{color:var(--ink-faint); font-size:.85rem; margin:0 0 1.2rem;}
+  .controls{display:flex; align-items:center; gap:.8rem; margin-bottom:1.4rem;}
+  .controls label{font-size:.8rem; color:var(--ink-dim);}
+  .controls input{
+    width:3.2rem; font-family:var(--font-mono); font-size:.9rem;
+    background:var(--bg-raised); color:var(--ink); border:1px solid var(--rule-strong);
+    padding:.3rem .4rem; border-radius:2px;
+  }
+  .controls button{
+    font-family:var(--font-mono); font-size:.85rem; font-weight:600;
+    background:var(--accent); color:var(--accent-ink); border:none;
+    padding:.4rem .9rem; border-radius:2px; cursor:pointer;
+  }
+  .controls button:hover{filter:brightness(1.08);}
+  #gridWrap{position:relative;}
+  #linkSvg{position:absolute; inset:0; pointer-events:none;}
+  .link-line{stroke:var(--rule-strong); stroke-width:1.5;}
+  #nodeGrid{display:grid; gap:10px; position:relative;}
+  .tile{
+    background:var(--bg-raised); border:1px solid var(--rule);
+    border-radius:3px; padding:.4rem .5rem; min-height:5.4rem;
+    display:flex; flex-direction:column;
+  }
+  .tile.error{border-color:#E0554F; box-shadow:0 0 0 1px #E0554F inset;}
+  .tile.error .tile-screen{color:#F09B96;}
+  .tile-label{
+    font-size:.68rem; color:var(--accent); font-weight:600;
+    letter-spacing:.04em; margin-bottom:.25rem;
+  }
+  .tile-screen{
+    font-size:.62rem; line-height:1.35; color:var(--ink-dim);
+    white-space:pre-wrap; word-break:break-word; flex:1;
+  }
+</style>
+</head>
+<body>
+
+<p class="back"><a href="../">&larr; bil-lang.org</a></p>
+
+<h1>Bil grid emulator &mdash; mesh ripple</h1>
+<p class="sub">Each tile is one node: an isolated Go/WASM instance in its own Worker, wired to its nearest neighbours by real blocking links (<a href="https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go">nodeprog/ripple</a>, from <a href="https://github.com/bil-lang/emulator">bil-lang/emulator</a>). A counter ripples east along each row, reflects at the last column, and ripples back.</p>
+
+<div class="controls">
+  <label>rows <input id="rowsInput" type="number" min="1" max="10" value="6"></label>
+  <label>cols <input id="colsInput" type="number" min="1" max="10" value="7"></label>
+  <button id="startBtn">Restart grid</button>
+</div>
+
+<div id="gridWrap">
+  <svg id="linkSvg"></svg>
+  <div id="nodeGrid"></div>
+</div>
+
+<script>
+  const BUF_BYTES = 128; // offset 0 = STATE, offset 1 = PAYLOAD (int32 words)
+
+  let workers = [];
+  let screenLines = {};
+  let currentRows = 0, currentCols = 0;
+
+  function makeLinkPair() {
+    return { ab: new SharedArrayBuffer(BUF_BYTES), ba: new SharedArrayBuffer(BUF_BYTES) };
+  }
+
+  // Plain mesh, not torus: edge/corner nodes simply have fewer wired
+  // slots, matching real transputer board wiring. Link addressing is
+  // by plain index, not compass name -- this topology's own fixed
+  // convention is slot 0=north, 1=east, 2=south, 3=west. A node
+  // program (and the bilink Go package) never sees these names, only
+  // link[i]; what each index means is owned entirely by this function.
+  const NORTH = 0, EAST = 1, SOUTH = 2, WEST = 3;
+  const NUM_LINKS = 4;
+
+  function buildTopology(rows, cols) {
+    const nodeLinks = Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => new Array(NUM_LINKS).fill(undefined))
+    );
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols - 1; c++) {
+        const { ab, ba } = makeLinkPair(); // ab: (r,c)->(r,c+1), ba: (r,c+1)->(r,c)
+        nodeLinks[r][c][EAST] = { out: ab, in: ba };
+        nodeLinks[r][c + 1][WEST] = { out: ba, in: ab };
+      }
+    }
+    for (let r = 0; r < rows - 1; r++) {
+      for (let c = 0; c < cols; c++) {
+        const { ab, ba } = makeLinkPair(); // ab: (r,c)->(r+1,c), ba: (r+1,c)->(r,c)
+        nodeLinks[r][c][SOUTH] = { out: ab, in: ba };
+        nodeLinks[r + 1][c][NORTH] = { out: ba, in: ab };
+      }
+    }
+    return nodeLinks;
+  }
+
+  function buildGridDOM(rows, cols) {
+    const grid = document.getElementById("nodeGrid");
+    grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    grid.innerHTML = "";
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        tile.id = `tile-${r}-${c}`;
+        tile.innerHTML =
+          `<div class="tile-label">${r},${c}</div>` +
+          `<div class="tile-screen" id="screen-${r}-${c}"></div>`;
+        grid.appendChild(tile);
+      }
+    }
+  }
+
+  function appendScreenLine(r, c, text, isError) {
+    const key = `${r}-${c}`;
+    if (!screenLines[key]) screenLines[key] = [];
+    screenLines[key].push(isError ? "ERROR: " + text : text);
+    if (screenLines[key].length > 4) screenLines[key].shift();
+    const el = document.getElementById(`screen-${r}-${c}`);
+    if (el) el.textContent = screenLines[key].join("\n");
+    const tile = document.getElementById(`tile-${r}-${c}`);
+    if (tile && isError) tile.classList.add("error");
+  }
+
+  function drawLinkLines(rows, cols) {
+    const svg = document.getElementById("linkSvg");
+    const wrap = document.getElementById("gridWrap");
+    const wrapRect = wrap.getBoundingClientRect();
+    svg.setAttribute("width", wrapRect.width);
+    svg.setAttribute("height", wrapRect.height);
+    svg.innerHTML = "";
+
+    const ns = "http://www.w3.org/2000/svg";
+    function center(r, c) {
+      const el = document.getElementById(`tile-${r}-${c}`);
+      const rect = el.getBoundingClientRect();
+      return { x: rect.left - wrapRect.left + rect.width / 2, y: rect.top - wrapRect.top + rect.height / 2 };
+    }
+    function line(p1, p2) {
+      const el = document.createElementNS(ns, "line");
+      el.setAttribute("x1", p1.x); el.setAttribute("y1", p1.y);
+      el.setAttribute("x2", p2.x); el.setAttribute("y2", p2.y);
+      el.setAttribute("class", "link-line");
+      svg.appendChild(el);
+    }
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (c < cols - 1) line(center(r, c), center(r, c + 1));
+        if (r < rows - 1) line(center(r, c), center(r + 1, c));
+      }
+    }
+  }
+
+  // Tile heights aren't fixed -- #nodeGrid's rows auto-size to
+  // .tile-screen's content, which grows as each node's output arrives
+  // (up to 4 lines, see appendScreenLine) -- so the whole grid's layout
+  // keeps shifting well after the one-shot draw right after spawn.
+  // Watching #nodeGrid's own box size (rather than only window resize)
+  // catches that content-driven reflow, not just viewport changes.
+  let linkRedrawScheduled = false;
+  function scheduleDrawLinkLines() {
+    if (linkRedrawScheduled) return;
+    linkRedrawScheduled = true;
+    requestAnimationFrame(() => {
+      linkRedrawScheduled = false;
+      drawLinkLines(currentRows, currentCols);
+    });
+  }
+  new ResizeObserver(scheduleDrawLinkLines).observe(document.getElementById("nodeGrid"));
+
+  // Small, purpose-built expression evaluator for the tiny grammar
+  // bilc's placed-par clause-match/leaf-condition expressions actually
+  // use in roles/placement.json: identifiers (r, c, rows, cols), int
+  // literals, ==, !=, &&, +, -. Deliberately not eval()/Function() --
+  // these strings come from this page's own trusted build output, but a
+  // hand-rolled evaluator keeps the supported grammar explicit and
+  // auditable rather than silently growing to accept arbitrary JS.
+  function evalExpr(src, vars) {
+    let i = 0;
+    function skipWs() { while (i < src.length && /\s/.test(src[i])) i++; }
+    function consume(tok) {
+      skipWs();
+      if (src.startsWith(tok, i)) { i += tok.length; return true; }
+      return false;
+    }
+    function parsePrimary() {
+      skipWs();
+      if (consume("(")) {
+        const v = parseAnd();
+        if (!consume(")")) throw new Error(`evalExpr: expected ) in "${src}"`);
+        return v;
+      }
+      const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(src.slice(i));
+      if (m) {
+        i += m[0].length;
+        if (!(m[0] in vars)) throw new Error(`evalExpr: unknown identifier "${m[0]}" in "${src}"`);
+        return vars[m[0]];
+      }
+      const n = /^[0-9]+/.exec(src.slice(i));
+      if (n) { i += n[0].length; return parseInt(n[0], 10); }
+      throw new Error(`evalExpr: unexpected token at ${i} in "${src}"`);
+    }
+    function parseAdd() {
+      let v = parsePrimary();
+      for (;;) {
+        if (consume("+")) v = v + parsePrimary();
+        else if (consume("-")) v = v - parsePrimary();
+        else return v;
+      }
+    }
+    function parseCmp() {
+      const v = parseAdd();
+      if (consume("==")) return v === parseAdd();
+      if (consume("!=")) return v !== parseAdd();
+      return v;
+    }
+    function parseAnd() {
+      let v = parseCmp();
+      while (consume("&&")) {
+        const rhs = parseCmp(); // always parse, to advance i past a false lhs too
+        v = v && rhs;
+      }
+      return v;
+    }
+    const result = parseAnd();
+    skipWs();
+    if (i !== src.length) throw new Error(`evalExpr: trailing input in "${src}"`);
+    return result;
+  }
+
+  // resolveRole walks roles/placement.json's leaves in order (matching
+  // switch/if-else "first match wins" semantics: non-default clauses
+  // always precede default's own leaves, per parsePlacedParClauses's
+  // own ordering) and returns the one proc that should run at (r,c), by
+  // evaluating each leaf's clause match and if/else condition chain
+  // against this launch's real grid size -- the concrete resolution
+  // bilc itself can never do, since it never knows rows/cols. A match's
+  // row or col may be the literal string "*" (from a bilc `processor(1,
+  // *)` partial wildcard) -- that dimension always matches, with no
+  // expression to evaluate at all; a fully-wild clause (`default` or
+  // `processor(*, *)`) is reported as `m.default` instead, never as
+  // row/col both "*" (see bilc's PlacementManifest doc comment).
+  function resolveRole(leaves, r, c, rows, cols) {
+    const vars = { r, c, rows, cols };
+    for (const leaf of leaves) {
+      const m = leaf.match;
+      let clauseMatches;
+      if (m.default) clauseMatches = true;
+      else if ("id" in m) clauseMatches = evalExpr(m.id, vars) === r * cols + c;
+      else {
+        const rowOk = m.row === "*" || evalExpr(m.row, vars) === r;
+        const colOk = m.col === "*" || evalExpr(m.col, vars) === c;
+        clauseMatches = rowOk && colOk;
+      }
+      if (!clauseMatches) continue;
+
+      let ok = true;
+      for (const cond of leaf.conditions || []) {
+        const v = !!evalExpr(cond.expr, vars);
+        if (cond.negate ? v : !v) { ok = false; break; }
+      }
+      if (ok) return leaf.proc;
+    }
+    return null;
+  }
+
+  // The link-native boot cascade's spanning tree: a simple deterministic
+  // "staircase" over the grid graph, rooted at (0,0) -- every node's
+  // parent is its west neighbour, except column-0 nodes (other than the
+  // root itself) whose parent is the node directly north. Equivalently,
+  // a node's children are its east neighbour (always, when one exists)
+  // and, only for column-0 nodes, its south neighbour. This is a
+  // property of how code is *delivered*, independent of the ordinary
+  // mesh links ordinary Bil `link[i]` traffic uses.
+  function bootChildCoords(r, c, rows, cols) {
+    const kids = [];
+    if (c + 1 < cols) kids.push([r, c + 1]);
+    if (c === 0 && r + 1 < rows) kids.push([r + 1, 0]);
+    return kids;
+  }
+
+  // Spawning every Worker in one tight loop overloads the browser well
+  // before the grid gets big: each Worker independently fetches and
+  // compiles a ~2.6MB WASM module and boots a full separate Go runtime
+  // (its own goroutine scheduler, GC, heap) -- genuinely heavy per node
+  // by this emulator's own design (real OS thread, real isolated
+  // memory, see README.md). Firing 100+ of those concurrently silently
+  // stalls some of them with no error at all, confirmed even at 12x12
+  // (144 nodes) on a freshly loaded page. Staggering creation in small
+  // batches keeps concurrent WASM instantiation bounded instead.
+  const SPAWN_BATCH_SIZE = 6;
+  const SPAWN_BATCH_DELAY_MS = 200;
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Guards against a second "Restart grid" click while a previous
+  // staggered spawn is still mid-flight -- without this, the old
+  // spawn loop would keep running after `workers`/`screenLines` were
+  // reset for the new grid, wiring stale Workers into current state.
+  let spawnGeneration = 0;
+
+  function makeWorker(r, c) {
+    const w = new Worker("node-worker.js");
+    w.onmessage = (e) => {
+      if (e.data && e.data.type === "screen") {
+        appendScreenLine(e.data.row, e.data.col, e.data.text);
+      } else if (e.data && e.data.type === "error") {
+        appendScreenLine(e.data.row, e.data.col, e.data.text, true);
+      }
+    };
+    w.onerror = (e) => appendScreenLine(r, c, e.message, true);
+    workers.push(w);
+    return w;
+  }
+
+  async function startGridLegacy(rows, cols, nodeLinks, myGeneration) {
+    const coords = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) coords.push([r, c]);
+    }
+    for (let i = 0; i < coords.length; i += SPAWN_BATCH_SIZE) {
+      if (myGeneration !== spawnGeneration) return; // superseded by a newer restart
+      for (const [r, c] of coords.slice(i, i + SPAWN_BATCH_SIZE)) {
+        makeWorker(r, c).postMessage({ row: r, col: c, rows, cols, links: nodeLinks[r][c] });
+      }
+      if (i + SPAWN_BATCH_SIZE < coords.length) await sleep(SPAWN_BATCH_DELAY_MS);
+    }
+  }
+
+  // Link-native boot cascade: a host (this same page, acting as the one
+  // external entry point) injects code and identity only at (0,0);
+  // every other node learns its role, its position, and the actual code
+  // to run solely by relaying hop-by-hop across the spanning tree
+  // bootChildCoords defines -- never told directly by this page the way
+  // startGridLegacy tells every Worker outright. Used only when the
+  // current program has roles/placement.json (built by bilc's
+  // RoleBinaries/PlacementManifest); a program with no placed-par split
+  // falls back to startGridLegacy entirely. See README.md.
+  async function startGridCascade(rows, cols, nodeLinks, manifest, myGeneration) {
+    const leaves = manifest.leaves;
+    const roleNames = [...new Set(leaves.map((l) => l.proc))];
+    const roleBytes = {};
+    await Promise.all(roleNames.map(async (name) => {
+      const res = await fetch(`roles/${name}.wasm`);
+      roleBytes[name] = await res.arrayBuffer();
+    }));
+    if (myGeneration !== spawnGeneration) return;
+
+    // One MessageChannel per tree edge, keyed by the *child's* own
+    // coordinate: the parent keeps port1 (to send down), the child
+    // keeps port2 (as its own boot-parent port). (0,0) has no such
+    // edge -- its boot-parent is the host's own separate channel.
+    const edgeChannel = Array.from({ length: rows }, () => new Array(cols));
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (r === 0 && c === 0) continue;
+        edgeChannel[r][c] = new MessageChannel();
+      }
+    }
+    const hostChannel = new MessageChannel();
+
+    const coords = [];
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) coords.push([r, c]);
+    }
+    for (let i = 0; i < coords.length; i += SPAWN_BATCH_SIZE) {
+      if (myGeneration !== spawnGeneration) return;
+      for (const [r, c] of coords.slice(i, i + SPAWN_BATCH_SIZE)) {
+        const bootParentPort = (r === 0 && c === 0) ? hostChannel.port2 : edgeChannel[r][c].port2;
+        const bootChildPorts = bootChildCoords(r, c, rows, cols).map(([cr, cc]) => edgeChannel[cr][cc].port1);
+        makeWorker(r, c).postMessage(
+          { links: nodeLinks[r][c], bootParentPort, bootChildPorts },
+          [bootParentPort, ...bootChildPorts]
+        );
+      }
+      if (i + SPAWN_BATCH_SIZE < coords.length) await sleep(SPAWN_BATCH_DELAY_MS);
+    }
+    if (myGeneration !== spawnGeneration) return;
+
+    // Build the whole remaining tree's boot payload once, then send it
+    // to the one entry point a host may ever inject code at. wasmBytes
+    // is deliberately not marked Transferable: many nodes commonly
+    // share the same role's bytes, and a transfer would detach the
+    // buffer from every recipient but the first -- letting structured
+    // clone copy it instead is a fixed, one-time, few-megabyte cost.
+    function buildPayload(r, c) {
+      const proc = resolveRole(leaves, r, c, rows, cols);
+      if (!proc) throw new Error(`no placed-par leaf matches (${r},${c})`);
+      return {
+        role: proc,
+        wasmBytes: roleBytes[proc],
+        identity: { row: r, col: c, rows, cols, numLinks: NUM_LINKS },
+        forward: bootChildCoords(r, c, rows, cols).map(([cr, cc], idx) => ({
+          childIndex: idx,
+          payload: buildPayload(cr, cc),
+        })),
+      };
+    }
+    hostChannel.port1.postMessage(buildPayload(0, 0));
+  }
+
+  async function startGrid(rows, cols) {
+    const myGeneration = ++spawnGeneration;
+
+    workers.forEach((w) => w.terminate());
+    workers = [];
+    screenLines = {};
+    currentRows = rows;
+    currentCols = cols;
+
+    const nodeLinks = buildTopology(rows, cols);
+    buildGridDOM(rows, cols);
+
+    // Feature-detect per-role delivery: a program built with
+    // RoleBinaries/PlacementManifest ships roles/placement.json alongside its
+    // node.wasm; a program with no placed-par split has neither, and
+    // this page falls back to the legacy direct-postMessage bootstrap
+    // entirely unchanged.
+    let manifest = null;
+    try {
+      const res = await fetch("roles/placement.json");
+      if (res.ok) manifest = await res.json();
+    } catch (e) { /* no cascade artifacts for this program -- legacy path */ }
+    if (myGeneration !== spawnGeneration) return;
+
+    if (manifest) {
+      await startGridCascade(rows, cols, nodeLinks, manifest, myGeneration);
+    } else {
+      await startGridLegacy(rows, cols, nodeLinks, myGeneration);
+    }
+
+    scheduleDrawLinkLines();
+  }
+
+  // number inputs don't clamp values typed by hand (only spinner
+  // clicks respect min/max), so a stray "20" reaches here uncapped --
+  // clamp explicitly. The cap itself exists because spawning too many
+  // real-OS-thread Workers at once silently stalls past a few hundred
+  // (see ../README.md); each tile is one Worker, so rows*cols is what
+  // actually matters.
+  function clampInput(id) {
+    const el = document.getElementById(id);
+    const min = parseInt(el.min, 10), max = parseInt(el.max, 10);
+    let v = parseInt(el.value, 10);
+    if (isNaN(v)) v = min;
+    v = Math.min(max, Math.max(min, v));
+    el.value = v;
+    return v;
+  }
+
+  document.getElementById("startBtn").addEventListener("click", () => {
+    const rows = clampInput("rowsInput");
+    const cols = clampInput("colsInput");
+    startGrid(rows, cols);
+  });
+
+  window.addEventListener("resize", scheduleDrawLinkLines);
+
+  // ?rows=N&cols=N presets the fields and auto-starts at that size --
+  // used by `bil emu` to launch straight at a size it already computed
+  // (see tools/bil/gridsize.go in the bil repo), rather than requiring
+  // the rows/cols fields to be set by hand after the page loads. Falls
+  // back to the existing 6x7 default when absent, and goes through the
+  // same clampInput() every manual "Restart grid" click already does,
+  // so an out-of-range query value can't exceed min/max either.
+  const params = new URLSearchParams(location.search);
+  document.getElementById("rowsInput").value = params.get("rows") ?? "6";
+  document.getElementById("colsInput").value = params.get("cols") ?? "7";
+  startGrid(clampInput("rowsInput"), clampInput("colsInput"));
+</script>
+</body>
+</html>
