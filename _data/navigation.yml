@@ -1,11 +1,5 @@
 main:
   - title: "Posts"
     url: /posts/
-  - title: "Categories"
-    url: /categories/
-  - title: "Tags"
-    url: /tags/
-  - title: "About"
-    url: /about/
-  - title: "Guide"
-    url: https://github.com/bil-lang/bil/blob/main/docs/guide.md
+  - title: "Getting Started"
+    url: /getting-started/
