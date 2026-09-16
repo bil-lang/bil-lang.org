@@ -65,9 +65,8 @@ plugins:
   - jekyll-include-cache
 
 author:
-  name   : "Pipeline Mesh"
+  name   : "Source code repos:"
   avatar : "/assets/images/pipeline-mesh.png"
-  bio    : "Source code repos:"
   links:
     - label: "Bil toolchain"
       icon: "fab fa-fw fa-github"
