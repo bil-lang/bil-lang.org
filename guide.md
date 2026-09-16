@@ -1,7 +1,6 @@
 ---
 layout: single
 permalink: /guide/
-title: "Guide"
 author_profile: true
 ---
 
