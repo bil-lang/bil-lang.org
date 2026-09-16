@@ -1,7 +1,7 @@
 ---
 layout: single
 permalink: /getting-started/
-author_profile: true
+author_profile: false
 ---
 
 {% capture content %}

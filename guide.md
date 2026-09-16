@@ -1,7 +1,7 @@
 ---
 layout: single
 permalink: /guide/
-author_profile: true
+author_profile: false
 ---
 
 {% capture content %}
