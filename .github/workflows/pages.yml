@@ -34,8 +34,13 @@ jobs:
       # of its tracked branch so every build picks up whatever's
       # currently on bil-lang/bil and bil-lang/emulator, without needing
       # a manual `git submodule update --remote` + commit here first.
+      # Plain checkout, not --merge/--rebase: actions/checkout's shallow
+      # fetch leaves the submodule at a detached commit with no shared
+      # history against the newly-fetched branch tip, so a merge fails
+      # with "refusing to merge unrelated histories" -- CI has no local
+      # submodule changes to preserve anyway, a plain checkout is enough.
       - name: Update submodules to latest
-        run: git submodule update --remote --merge
+        run: git submodule update --remote
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
