@@ -6,6 +6,6 @@ author_profile: true
 ---
 
 {% capture content %}
-{% include_relative external/emulator/README.md %}
+{% include_relative external/bil/README.md %}
 {% endcapture %}
 {{ content }}
