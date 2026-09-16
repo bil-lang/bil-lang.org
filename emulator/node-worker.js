@@ -123,6 +123,12 @@ self.onmessage = (e) => {
     link ? { out: new Int32Array(link.out), in: new Int32Array(link.in) } : undefined
   );
 
+  // Cosmetic per-hop pacing (see each nodeprog's own hopDelay comment) --
+  // read once by the WASM program's own package-level var init, via
+  // js.Global().Get("bilHopMs"), so it must be set on this Worker's own
+  // global before go.run() below, whichever bootstrap path runs.
+  self.bilHopMs = msg.hopMs;
+
   if (msg.bootParentPort) {
     // Link-native boot cascade (see index.html's startGridCascade):
     // this node's role, its identity (row/col/rows/cols), and the

@@ -34,6 +34,15 @@
     background:var(--bg-raised); color:var(--ink); border:1px solid var(--rule-strong);
     padding:.3rem .4rem; border-radius:2px;
   }
+  .controls select{
+    font-family:var(--font-mono); font-size:.85rem;
+    background:var(--bg-raised); color:var(--ink); border:1px solid var(--rule-strong);
+    padding:.3rem .4rem; border-radius:2px;
+  }
+  .controls input[type="range"]{
+    width:12rem; vertical-align:middle; accent-color:var(--accent);
+  }
+  #hopValue{font-family:var(--font-mono); font-size:.8rem; color:var(--ink-dim);}
   .controls button{
     font-family:var(--font-mono); font-size:.85rem; font-weight:600;
     background:var(--accent); color:var(--accent-ink); border:none;
@@ -65,13 +74,24 @@
 
 <p class="back"><a href="../">&larr; bil-lang.org</a></p>
 
-<h1>Bil grid emulator &mdash; mesh ripple</h1>
-<p class="sub">Each tile is one node: an isolated Go/WASM instance in its own Worker, wired to its nearest neighbours by real blocking links (<a href="https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go">nodeprog/ripple</a>, from <a href="https://github.com/bil-lang/emulator">bil-lang/emulator</a>). A counter ripples east along each row, reflects at the last column, and ripples back.</p>
+<h1>Bil grid emulator</h1>
+<p class="sub" id="exampleSub">Each tile is one node: an isolated Go/WASM instance in its own Worker, wired to its nearest neighbours by real blocking links, from <a href="https://github.com/bil-lang/emulator">bil-lang/emulator</a>.</p>
 
 <div class="controls">
+  <label>example
+    <select id="exampleSelect">
+      <option value="ripple">10 &mdash; mesh ripple</option>
+      <option value="ex20">20 &mdash; placed controller</option>
+      <option value="ex21">21 &mdash; mesh transformer</option>
+      <option value="ex22">22 &mdash; pipeline transformer</option>
+    </select>
+  </label>
   <label>rows <input id="rowsInput" type="number" min="1" max="10" value="6"></label>
   <label>cols <input id="colsInput" type="number" min="1" max="10" value="7"></label>
   <button id="startBtn">Restart grid</button>
+</div>
+<div class="controls">
+  <label>hop time <input id="hopSlider" type="range" min="0" max="400" step="10" value="150"> <span id="hopValue">150ms</span></label>
 </div>
 
 <div id="gridWrap">
@@ -342,7 +362,7 @@
     return w;
   }
 
-  async function startGridLegacy(rows, cols, nodeLinks, myGeneration) {
+  async function startGridLegacy(rows, cols, nodeLinks, hopMs, myGeneration) {
     const coords = [];
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) coords.push([r, c]);
@@ -350,7 +370,7 @@
     for (let i = 0; i < coords.length; i += SPAWN_BATCH_SIZE) {
       if (myGeneration !== spawnGeneration) return; // superseded by a newer restart
       for (const [r, c] of coords.slice(i, i + SPAWN_BATCH_SIZE)) {
-        makeWorker(r, c).postMessage({ row: r, col: c, rows, cols, links: nodeLinks[r][c] });
+        makeWorker(r, c).postMessage({ row: r, col: c, rows, cols, links: nodeLinks[r][c], hopMs });
       }
       if (i + SPAWN_BATCH_SIZE < coords.length) await sleep(SPAWN_BATCH_DELAY_MS);
     }
@@ -365,12 +385,12 @@
   // current program has roles/placement.json (built by bilc's
   // RoleBinaries/PlacementManifest); a program with no placed-par split
   // falls back to startGridLegacy entirely. See README.md.
-  async function startGridCascade(rows, cols, nodeLinks, manifest, myGeneration) {
+  async function startGridCascade(rows, cols, nodeLinks, manifest, base, hopMs, myGeneration) {
     const leaves = manifest.leaves;
     const roleNames = [...new Set(leaves.map((l) => l.proc))];
     const roleBytes = {};
     await Promise.all(roleNames.map(async (name) => {
-      const res = await fetch(`roles/${name}.wasm`);
+      const res = await fetch(`${base}roles/${name}.wasm`);
       roleBytes[name] = await res.arrayBuffer();
     }));
     if (myGeneration !== spawnGeneration) return;
@@ -398,7 +418,7 @@
         const bootParentPort = (r === 0 && c === 0) ? hostChannel.port2 : edgeChannel[r][c].port2;
         const bootChildPorts = bootChildCoords(r, c, rows, cols).map(([cr, cc]) => edgeChannel[cr][cc].port1);
         makeWorker(r, c).postMessage(
-          { links: nodeLinks[r][c], bootParentPort, bootChildPorts },
+          { links: nodeLinks[r][c], bootParentPort, bootChildPorts, hopMs },
           [bootParentPort, ...bootChildPorts]
         );
       }
@@ -430,6 +450,8 @@
 
   async function startGrid(rows, cols) {
     const myGeneration = ++spawnGeneration;
+    const base = currentExample().base;
+    const hopMs = parseInt(document.getElementById("hopSlider").value, 10);
 
     workers.forEach((w) => w.terminate());
     workers = [];
@@ -447,15 +469,15 @@
     // entirely unchanged.
     let manifest = null;
     try {
-      const res = await fetch("roles/placement.json");
+      const res = await fetch(`${base}roles/placement.json`);
       if (res.ok) manifest = await res.json();
     } catch (e) { /* no cascade artifacts for this program -- legacy path */ }
     if (myGeneration !== spawnGeneration) return;
 
     if (manifest) {
-      await startGridCascade(rows, cols, nodeLinks, manifest, myGeneration);
+      await startGridCascade(rows, cols, nodeLinks, manifest, base, hopMs, myGeneration);
     } else {
-      await startGridLegacy(rows, cols, nodeLinks, myGeneration);
+      await startGridLegacy(rows, cols, nodeLinks, hopMs, myGeneration);
     }
 
     scheduleDrawLinkLines();
@@ -477,6 +499,62 @@
     return v;
   }
 
+  // Each option is built fresh from bil/examples/<N>-*.bil via bilc + the
+  // per-role WASM build steps in ../README.md, vendored here under its
+  // own base/ (roles/*.wasm + roles/placement.json) so the page's own
+  // relative fetches ("roles/X.wasm", "roles/placement.json") just need
+  // a base prefix -- see startGrid/startGridCascade above. "ripple" is
+  // the odd one out: nodeprog/ripple is hand-written Go, not compiled
+  // from a .bil source, and lives at the emulator/ root (no base, no
+  // roles/ -- legacy bootstrap).
+  const EXAMPLES = {
+    ripple: {
+      base: "", minRows: 1, defaultRows: 6, defaultCols: 7, defaultHopMs: 150,
+      desc: 'A counter ripples east along each row, reflects at the last column, and ripples back (<a href="https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go">nodeprog/ripple</a>, hand-written Go -- the substrate proof, not compiled from a .bil source).',
+    },
+    ex20: {
+      base: "ex20/", minRows: 1, defaultRows: 6, defaultCols: 7, defaultHopMs: 150,
+      desc: 'A heterogeneous <code>placed par</code>: <code>controller</code>/<code>rowEnd</code>/<code>relay</code> ripple a value along row 0, every other row runs <code>idle</code> (<a href="https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil">examples/20-placed-controller.bil</a>).',
+    },
+    ex21: {
+      base: "ex21/", minRows: 1, defaultRows: 6, defaultCols: 7, defaultHopMs: 80,
+      desc: 'The same controller/rowEnd/relay/idle placement, now carrying a tiny transformer’s embeddings and attention scores across row 0 (<a href="https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil">examples/21-mesh-transformer.bil</a>).',
+    },
+    ex22: {
+      base: "ex22/", minRows: 4, defaultRows: 4, defaultCols: 4, defaultHopMs: 60,
+      desc: 'A tiny transformer pipelined down the mesh’s rows — embed, attention, feed-forward, output — each column computing its own token in parallel (<a href="https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil">examples/22-pipeline-transformer.bil</a>). Needs at least 4 rows.',
+    },
+  };
+
+  function currentExample() {
+    return EXAMPLES[document.getElementById("exampleSelect").value];
+  }
+
+  function updateExampleUI() {
+    const ex = currentExample();
+    document.getElementById("exampleSub").innerHTML = ex.desc;
+    document.getElementById("rowsInput").min = ex.minRows;
+    if (clampInput("rowsInput") < ex.minRows) document.getElementById("rowsInput").value = ex.defaultRows;
+    document.getElementById("hopSlider").value = ex.defaultHopMs;
+    document.getElementById("hopValue").textContent = ex.defaultHopMs + "ms";
+  }
+
+  document.getElementById("exampleSelect").addEventListener("change", () => {
+    const ex = currentExample();
+    document.getElementById("rowsInput").value = ex.defaultRows;
+    document.getElementById("colsInput").value = ex.defaultCols;
+    updateExampleUI();
+    startGrid(clampInput("rowsInput"), clampInput("colsInput"));
+  });
+
+  // hopDelay is read once, at each WASM program's own package-level var
+  // init (see ../README.md's build patch) -- so the slider's value only
+  // takes effect for newly spawned Workers, not ones already running.
+  // The live label still updates on every drag for direct feedback.
+  document.getElementById("hopSlider").addEventListener("input", (e) => {
+    document.getElementById("hopValue").textContent = e.target.value + "ms";
+  });
+
   document.getElementById("startBtn").addEventListener("click", () => {
     const rows = clampInput("rowsInput");
     const cols = clampInput("colsInput");
@@ -485,16 +563,25 @@
 
   window.addEventListener("resize", scheduleDrawLinkLines);
 
-  // ?rows=N&cols=N presets the fields and auto-starts at that size --
-  // used by `bil emu` to launch straight at a size it already computed
-  // (see tools/bil/gridsize.go in the bil repo), rather than requiring
-  // the rows/cols fields to be set by hand after the page loads. Falls
-  // back to the existing 6x7 default when absent, and goes through the
-  // same clampInput() every manual "Restart grid" click already does,
-  // so an out-of-range query value can't exceed min/max either.
+  // ?example=NAME&rows=N&cols=N&hop=N presets the fields and auto-starts
+  // at that configuration -- used by `bil emu` to launch straight at a
+  // size/example it already computed (see tools/bil/gridsize.go in the
+  // bil repo), rather than requiring the fields to be set by hand after
+  // the page loads. Falls back to each example's own default when
+  // absent, and goes through the same clampInput() every manual
+  // "Restart grid" click already does, so an out-of-range query value
+  // can't exceed min/max either.
   const params = new URLSearchParams(location.search);
-  document.getElementById("rowsInput").value = params.get("rows") ?? "6";
-  document.getElementById("colsInput").value = params.get("cols") ?? "7";
+  const exampleParam = params.get("example");
+  if (exampleParam && EXAMPLES[exampleParam]) document.getElementById("exampleSelect").value = exampleParam;
+  updateExampleUI();
+  const ex0 = currentExample();
+  document.getElementById("rowsInput").value = params.get("rows") ?? ex0.defaultRows;
+  document.getElementById("colsInput").value = params.get("cols") ?? ex0.defaultCols;
+  if (params.get("hop")) {
+    document.getElementById("hopSlider").value = params.get("hop");
+    document.getElementById("hopValue").textContent = params.get("hop") + "ms";
+  }
   startGrid(clampInput("rowsInput"), clampInput("colsInput"));
 </script>
 </body>
