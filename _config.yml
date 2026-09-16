@@ -27,8 +27,8 @@ search: true
 # Build settings
 markdown: kramdown
 remote_theme: mmistakes/minimal-mistakes
-url: "https://bil-lang.org"
-baseurl:
+url: "https://bil-lang.github.io"
+baseurl: "/bil-lang.org"
 repository: "bil-lang/bil-lang.org"
 # Outputting
 permalink: /:categories/:title/
