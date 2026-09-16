@@ -4,6 +4,12 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+  schedule:
+    # Content pulled in via include_relative (Guide, Getting Started, the
+    # emulator demo) lives in the bil/emulator repos, not this one -- a
+    # push here isn't the only thing that should refresh the site, so
+    # also rebuild daily to pick up anything pushed upstream.
+    - cron: "17 6 * * *"
 
 permissions:
   contents: read
@@ -22,6 +28,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: true
+
+      # actions/checkout only fetches the submodule commit currently
+      # pinned by this repo's own gitlink -- move each one to the tip
+      # of its tracked branch so every build picks up whatever's
+      # currently on bil-lang/bil and bil-lang/emulator, without needing
+      # a manual `git submodule update --remote` + commit here first.
+      - name: Update submodules to latest
+        run: git submodule update --remote --merge
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
