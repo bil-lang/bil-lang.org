@@ -7,7 +7,7 @@ author_profile: false
 {% capture content %}
 {% include_relative external/bil/docs/guide.md %}
 {% endcapture %}
-{{ content }}
+{{ content | replace: '[^^](#top)', '[⇧ top](#top)' }}
 
 <style>
   .mermaid { overflow-x: auto; margin: 1.5em 0; }
