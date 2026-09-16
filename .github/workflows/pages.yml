@@ -26,7 +26,11 @@ jobs:
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: "3.2"
+          # Pinned to 3.1: the github-pages gem locks Liquid ~>4.0, whose
+          # taint_check calls Object#tainted? -- removed in Ruby 3.2, so
+          # 3.2+ crashes every render with "undefined method `tainted?'
+          # for nil:NilClass". 3.1 still has it (deprecated, but present).
+          ruby-version: "3.1"
           bundler-cache: true
 
       - name: Setup Pages
