@@ -64,17 +64,6 @@
     font-size:.62rem; line-height:1.35; color:var(--ink-dim);
     white-space:pre-wrap; word-break:break-word; flex:1;
   }
-  #sourceWrap{margin-top:2rem;}
-  #sourceWrap h2{
-    font-family:var(--font-head); font-weight:700; font-size:1.1rem;
-    margin:0 0 .5rem; color:var(--ink);
-  }
-  #sourceWrap p{margin:0 0 .6rem; font-size:.8rem; color:var(--ink-faint);}
-  #sourceCode{
-    display:block; background:var(--bg-raised); border:1px solid var(--rule);
-    border-radius:3px; padding:1rem; font-size:.72rem; line-height:1.5;
-    color:var(--ink-dim); overflow-x:auto; white-space:pre;
-  }
 </style>
 </head>
 <body>
@@ -101,12 +90,6 @@
 <div id="gridWrap">
   <svg id="linkSvg"></svg>
   <div id="nodeGrid"></div>
-</div>
-
-<div id="sourceWrap">
-  <h2 id="sourceHeading">Source</h2>
-  <p id="sourceDesc"></p>
-  <code id="sourceCode"></code>
 </div>
 
 <script>
@@ -510,35 +493,27 @@
 
   // Each option is built fresh from bil/examples/<N>-*.bil via bilc + the
   // per-role WASM build steps in ../README.md, vendored here under its
-  // own base/ (roles/*.wasm + roles/placement.json + source.bil) so the
-  // page's own relative fetches ("roles/X.wasm", "roles/placement.json",
-  // "source.bil") just need a base prefix -- see startGrid/
-  // startGridCascade above. "ripple" is the odd one out: nodeprog/ripple
-  // is hand-written Go, not compiled from a .bil source, and lives at
-  // the emulator/ root (no base, no roles/ -- legacy bootstrap).
+  // own base/ (roles/*.wasm + roles/placement.json) so the page's own
+  // relative fetches ("roles/X.wasm", "roles/placement.json") just need
+  // a base prefix -- see startGrid/startGridCascade above. "ripple" is
+  // the odd one out: nodeprog/ripple is hand-written Go, not compiled
+  // from a .bil source, and lives at the emulator/ root (no base, no
+  // roles/ -- legacy bootstrap).
   const EXAMPLES = {
     ripple: {
       base: "", minRows: 1, defaultRows: 6, defaultCols: 7,
-      sourceFile: "source.go", sourceLabel: "nodeprog/ripple/main.go",
-      sourceUrl: "https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go",
       desc: 'A counter ripples east along each row, reflects at the last column, and ripples back (<a href="https://github.com/bil-lang/emulator/blob/main/nodeprog/ripple/main.go">nodeprog/ripple</a>, hand-written Go -- the substrate proof, not compiled from a .bil source).',
     },
     ex20: {
       base: "ex20/", minRows: 1, defaultRows: 6, defaultCols: 7,
-      sourceFile: "ex20/source.bil", sourceLabel: "examples/20-placed-controller.bil",
-      sourceUrl: "https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil",
       desc: 'A heterogeneous <code>placed par</code>: <code>controller</code>/<code>rowEnd</code>/<code>relay</code> ripple a value along row 0, every other row runs <code>idle</code> (<a href="https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil">examples/20-placed-controller.bil</a>).',
     },
     ex21: {
       base: "ex21/", minRows: 1, defaultRows: 6, defaultCols: 7,
-      sourceFile: "ex21/source.bil", sourceLabel: "examples/21-mesh-transformer.bil",
-      sourceUrl: "https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil",
       desc: 'The same controller/rowEnd/relay/idle placement, now carrying a tiny transformer’s embeddings and attention scores across row 0 (<a href="https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil">examples/21-mesh-transformer.bil</a>).',
     },
     ex22: {
       base: "ex22/", minRows: 4, defaultRows: 4, defaultCols: 4,
-      sourceFile: "ex22/source.bil", sourceLabel: "examples/22-pipeline-transformer.bil",
-      sourceUrl: "https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil",
       desc: 'A tiny transformer pipelined down the mesh’s rows — embed, attention, feed-forward, output — each column computing its own token in parallel (<a href="https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil">examples/22-pipeline-transformer.bil</a>). Needs at least 4 rows.',
     },
   };
@@ -547,29 +522,11 @@
     return EXAMPLES[document.getElementById("exampleSelect").value];
   }
 
-  function escapeHtml(s) {
-    return s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-  }
-
-  let sourceLoadGeneration = 0;
-  async function loadSource(ex) {
-    const myGeneration = ++sourceLoadGeneration;
-    document.getElementById("sourceHeading").textContent = "Source — " + ex.sourceLabel;
-    document.getElementById("sourceDesc").innerHTML =
-      'View on <a href="' + ex.sourceUrl + '">GitHub</a>.';
-    document.getElementById("sourceCode").textContent = "Loading…";
-    const res = await fetch(ex.sourceFile);
-    const text = await res.text();
-    if (myGeneration !== sourceLoadGeneration) return; // superseded by a newer example switch
-    document.getElementById("sourceCode").innerHTML = escapeHtml(text);
-  }
-
   function updateExampleUI() {
     const ex = currentExample();
     document.getElementById("exampleSub").innerHTML = ex.desc;
     document.getElementById("rowsInput").min = ex.minRows;
     if (clampInput("rowsInput") < ex.minRows) document.getElementById("rowsInput").value = ex.defaultRows;
-    loadSource(ex);
   }
 
   document.getElementById("exampleSelect").addEventListener("change", () => {
