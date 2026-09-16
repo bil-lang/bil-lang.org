@@ -67,7 +67,7 @@ plugins:
 author:
   name   : "Pipeline Mesh"
   avatar : "/assets/images/pipeline-mesh.png"
-  bio    : "My awesome biography constrained to a sentence or two goes here."
+  bio    : "Source code repos:"
   links:
     - label: "Bil toolchain"
       icon: "fab fa-fw fa-github"
