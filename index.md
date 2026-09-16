@@ -32,10 +32,6 @@ flowchart TD
 
 Bil is intended for parallel processor systems, but also efficiently supports single processor and multicore shared memory processor architectures for easier reasoning about concurrent code, software development and educational purposes. A Bil emulator (`WASM`) implements a parallel processor mesh to model and test massively parallel systems.
 
-<style>
-  .mermaid { overflow-x: auto; }
-  .mermaid svg { width: 900px !important; max-width: none !important; height: auto !important; }
-</style>
 <script src="{{ '/vendor/mermaid/mermaid.min.js' | relative_url }}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
