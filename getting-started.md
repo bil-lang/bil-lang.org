@@ -1,7 +1,6 @@
 ---
 layout: single
 permalink: /getting-started/
-title: "Getting Started"
 author_profile: true
 ---
 
