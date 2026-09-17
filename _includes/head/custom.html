@@ -17,6 +17,23 @@
     animation: none !important;
     opacity: 1 !important;
   }
+  /* Deliberately not .search__toggle -- main.min.js binds a jQuery click
+     handler to that exact class (search overlay open/close) regardless of
+     site.search, and it was firing on this button too, toggling
+     .initial-content's is--hidden class and collapsing the whole page. */
+  .theme__toggle {
+    margin-inline: 1rem;
+    height: 2rem;
+    border: 0;
+    outline: none;
+    background-color: transparent;
+    cursor: pointer;
+    color: inherit;
+    transition: 0.2s;
+  }
+  .theme__toggle:hover {
+    opacity: 0.7;
+  }
 </style>
 
 <!-- Light/dark toggle: assets/css/main.css (dark, this site's default
