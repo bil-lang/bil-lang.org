@@ -46,8 +46,13 @@
      characters, which render at the browser default of 8 columns wide
      with no tab-size set anywhere in the theme, making nested code look
      far more indented than the source actually is. */
+  /* Fixed px, not em: the theme already wraps .highlight in a
+     .language-xxx.highlighter-rouge div with its own font-size: .75em,
+     so an em value here compounds against that (0.7em landed at ~7px,
+     unreadably small) rather than reading relative to the page's own
+     body text size. */
   .highlight, .highlight pre, .highlight code {
-    font-size: 0.7em !important;
+    font-size: 12px !important;
     tab-size: 2;
     -moz-tab-size: 2;
   }
