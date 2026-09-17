@@ -27,8 +27,8 @@ copyright: "Stephen Roe"
 # Build settings
 markdown: kramdown
 remote_theme: mmistakes/minimal-mistakes
-url: "https://bil-lang.github.io"
-baseurl: "/bil-lang.org"
+url: "https://bil-lang.org"
+baseurl: ""
 repository: "bil-lang/bil-lang.org"
 # Outputting
 permalink: /:categories/:title/
