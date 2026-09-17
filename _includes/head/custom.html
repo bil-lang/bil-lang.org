@@ -24,23 +24,6 @@
     animation: none !important;
     opacity: 1 !important;
   }
-  /* Deliberately not .search__toggle -- main.min.js binds a jQuery click
-     handler to that exact class (search overlay open/close) regardless of
-     site.search, and it was firing on this button too, toggling
-     .initial-content's is--hidden class and collapsing the whole page. */
-  .theme__toggle {
-    margin-inline: 1rem;
-    height: 2rem;
-    border: 0;
-    outline: none;
-    background-color: transparent;
-    cursor: pointer;
-    color: inherit;
-    transition: 0.2s;
-  }
-  .theme__toggle:hover {
-    opacity: 0.7;
-  }
   /* Code blocks: smaller than the theme's own .75em default, and a
      2-space tab-size -- Go/Bil source (gofmt) indents with real tab
      characters, which render at the browser default of 8 columns wide
@@ -55,6 +38,15 @@
     font-size: 12px !important;
     tab-size: 2;
     -moz-tab-size: 2;
+  }
+  /* Sidebar (bio links, contribute note) and footer copyright default to
+     the theme's small type sizes (.75em / .6875em) -- nudge both up a
+     little, still smaller than body text but more legible. */
+  .sidebar li {
+    font-size: 0.9em !important;
+  }
+  .page__footer-copyright {
+    font-size: 0.85em !important;
   }
 </style>
 
@@ -88,12 +80,23 @@
       apply(theme);
     });
 
+    // Capture phase (the `true` below), not the default bubble phase:
+    // #theme-toggle keeps the .search__toggle class (main.min.js's
+    // greedy-nav width calc explicitly measures "button.search__toggle"
+    // to reserve space for it in the masthead -- a different class name
+    // left it unaccounted-for and broke the responsive/hamburger
+    // collapse). But that class is also what main.min.js's own jQuery
+    // binds its search-overlay click handler to, directly on this
+    // button, regardless of site.search -- capture always runs before
+    // that bubble-phase handler, so stopPropagation() here reliably
+    // stops it from toggling .initial-content before it ever fires.
     document.addEventListener('click', function (e) {
       var btn = e.target.closest && e.target.closest('#theme-toggle');
       if (!btn) return;
+      e.stopPropagation();
       theme = theme === 'light' ? 'dark' : 'light';
       localStorage.setItem(KEY, theme);
       apply(theme);
-    });
+    }, true);
   })();
 </script>
