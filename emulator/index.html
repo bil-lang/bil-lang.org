@@ -499,19 +499,19 @@
   const EXAMPLES = {
     ripple: {
       base: "ex10/", minRows: 1, defaultRows: 6, defaultCols: 7,
-      desc: 'A counter ripples east along each row, reflects at the last column, and ripples back -- three roles (<code>origin</code>/<code>relay</code>/<code>reflect</code>) wildcarded across every row (<a href="https://github.com/bil-lang/bil/blob/main/examples/10-mesh-ripple.bil">examples/10-mesh-ripple.bil</a>).',
+      desc: 'A counter ripples east along each row, reflects at the last column, and ripples back -- three roles (<code>origin</code>/<code>relay</code>/<code>reflect</code>) wildcarded across every row (<a href="https://github.com/bil-lang/bil/blob/main/examples/10-mesh-ripple.bil">examples/10-mesh-ripple.bil</a>, hop delay: 150ms).',
     },
     ex20: {
       base: "ex20/", minRows: 1, defaultRows: 6, defaultCols: 7,
-      desc: 'A heterogeneous <code>placed par</code>: <code>controller</code>/<code>rowEnd</code>/<code>relay</code> ripple a value along row 0, every other row runs <code>idle</code> (<a href="https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil">examples/20-placed-controller.bil</a>).',
+      desc: 'A heterogeneous <code>placed par</code>: <code>controller</code>/<code>rowEnd</code>/<code>relay</code> ripple a value along row 0, every other row runs <code>idle</code> (<a href="https://github.com/bil-lang/bil/blob/main/examples/20-placed-controller.bil">examples/20-placed-controller.bil</a>, hop delay: 150ms).',
     },
     ex21: {
       base: "ex21/", minRows: 1, defaultRows: 6, defaultCols: 7,
-      desc: 'The same controller/rowEnd/relay/idle placement, now carrying a tiny transformer’s embeddings and attention scores across row 0 (<a href="https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil">examples/21-mesh-transformer.bil</a>).',
+      desc: 'The same controller/rowEnd/relay/idle placement, now carrying a tiny transformer’s embeddings and attention scores across row 0 (<a href="https://github.com/bil-lang/bil/blob/main/examples/21-mesh-transformer.bil">examples/21-mesh-transformer.bil</a>, hop delay: 80ms).',
     },
     ex22: {
       base: "ex22/", minRows: 4, defaultRows: 4, defaultCols: 4,
-      desc: 'A tiny transformer pipelined down the mesh’s rows — embed, attention, feed-forward, output — each column computing its own token in parallel (<a href="https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil">examples/22-pipeline-transformer.bil</a>). Needs at least 4 rows.',
+      desc: 'A tiny transformer pipelined down the mesh’s rows — embed, attention, feed-forward, output — each column computing its own token in parallel (<a href="https://github.com/bil-lang/bil/blob/main/examples/22-pipeline-transformer.bil">examples/22-pipeline-transformer.bil</a>, hop delay: 60ms). Needs at least 4 rows.',
     },
   };
 
