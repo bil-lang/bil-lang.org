@@ -2,6 +2,13 @@
 <link rel="alternate icon" type="image/png" href="{{ '/assets/images/logo.png' | relative_url }}">
 <link rel="apple-touch-icon" href="{{ '/assets/images/logo.png' | relative_url }}">
 <style>
+  /* Theme base is $doc-font-size: 16px, set on html -- every heading,
+     paragraph, and spacing unit elsewhere is em/rem-relative to this,
+     so shrinking it here scales the whole site's type proportionally
+     rather than needing separate overrides per element. */
+  html {
+    font-size: 14px !important;
+  }
   .author__urls-note {
     white-space: normal !important;
     word-break: normal !important;
