@@ -34,6 +34,16 @@
   .theme__toggle:hover {
     opacity: 0.7;
   }
+  /* Code blocks: smaller than the theme's own .75em default, and a
+     2-space tab-size -- Go/Bil source (gofmt) indents with real tab
+     characters, which render at the browser default of 8 columns wide
+     with no tab-size set anywhere in the theme, making nested code look
+     far more indented than the source actually is. */
+  .highlight, .highlight pre, .highlight code {
+    font-size: 0.7em !important;
+    tab-size: 2;
+    -moz-tab-size: 2;
+  }
 </style>
 
 <!-- Light/dark toggle: assets/css/main.css (dark, this site's default
