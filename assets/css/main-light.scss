@@ -1,0 +1,14 @@
+---
+# Second compiled stylesheet, alongside the theme's own assets/css/main.css
+# (which follows site.minimal_mistakes_skin, currently "dark"). This one
+# hardcodes the "default" (light) skin regardless of that setting, so both
+# palettes exist as separate stylesheets the light/dark toggle in
+# _includes/head/custom.html can switch between at runtime -- Sass skins
+# compile to fixed values, so a single stylesheet can't do this on its own.
+search: false
+---
+
+@charset "utf-8";
+
+@import "minimal-mistakes/skins/default"; // skin
+@import "minimal-mistakes"; // main partials

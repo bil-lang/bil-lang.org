@@ -8,3 +8,43 @@
     line-height: 1.5;
   }
 </style>
+
+<!-- Light/dark toggle: assets/css/main.css (dark, this site's default
+     skin) always loads; assets/css/main-light.css is a full second
+     stylesheet compiled from the theme's own "default" skin, loaded
+     disabled and enabled at runtime -- MM skins compile to fixed
+     values, so this is the simplest way to offer both from one theme.
+     Applied synchronously (not on DOMContentLoaded) so a stored "light"
+     preference takes effect before first paint, not after. -->
+<link id="theme-light-css" rel="stylesheet" href="{{ '/assets/css/main-light.css' | relative_url }}" disabled>
+<script>
+  (function () {
+    var KEY = 'bil-theme';
+    var lightCss = document.getElementById('theme-light-css');
+
+    function apply(theme) {
+      lightCss.disabled = theme !== 'light';
+      document.documentElement.setAttribute('data-theme', theme);
+      var btn = document.getElementById('theme-toggle');
+      if (btn) {
+        var icon = btn.querySelector('i');
+        if (icon) icon.className = theme === 'light' ? 'fas fa-moon' : 'fas fa-sun';
+      }
+    }
+
+    var theme = localStorage.getItem(KEY) || 'dark';
+    apply(theme); // sets the stylesheet before first paint; #theme-toggle doesn't exist yet in <head>, so its icon is fixed up below once it does
+
+    document.addEventListener('DOMContentLoaded', function () {
+      apply(theme);
+    });
+
+    document.addEventListener('click', function (e) {
+      var btn = e.target.closest && e.target.closest('#theme-toggle');
+      if (!btn) return;
+      theme = theme === 'light' ? 'dark' : 'light';
+      localStorage.setItem(KEY, theme);
+      apply(theme);
+    });
+  })();
+</script>
