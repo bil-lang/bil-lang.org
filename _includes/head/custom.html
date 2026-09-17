@@ -7,6 +7,16 @@
     word-break: normal !important;
     line-height: 1.5;
   }
+  /* Both compiled stylesheets (main.css, main-light.css) declare the same
+     "intro" fade-in animation on #main/.masthead/.page__footer/etc.
+     Toggling which stylesheet is active restarts/interrupts it, which can
+     leave an element stuck at the animation's 0% frame (opacity: .01,
+     effectively invisible) instead of settling at 100% (opacity: 1). It's
+     decorative only, so just disable it everywhere. */
+  #main, .masthead, .page__footer, .page__hero, .search-content__inner-wrap {
+    animation: none !important;
+    opacity: 1 !important;
+  }
 </style>
 
 <!-- Light/dark toggle: assets/css/main.css (dark, this site's default
