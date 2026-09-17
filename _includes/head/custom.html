@@ -48,6 +48,20 @@
   .page__footer-copyright {
     font-size: 0.85em !important;
   }
+  /* Gutter between sidebar and main content: the theme sizes .sidebar to
+     exactly match .page's own reserved padding-inline-end (200px, or
+     300px at the >=80em breakpoint), so they sit flush with no gap.
+     Shrinking .sidebar itself (not .page's padding) leaves that
+     difference as blank space to its right, inside the same reserved
+     slot -- .page's own box is untouched. */
+  .sidebar {
+    width: calc(200px - 1em - 20px) !important;
+  }
+  @media (min-width: 80em) {
+    .sidebar {
+      width: calc(300px - 1em - 20px) !important;
+    }
+  }
 </style>
 
 <!-- Light/dark toggle: assets/css/main.css (dark, this site's default
