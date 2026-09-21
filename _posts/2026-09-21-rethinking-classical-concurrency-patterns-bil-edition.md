@@ -12,7 +12,7 @@ tags:
 
 <a id="top"></a>
 
-This is a rewrite of Bryan C. Mills' [GopherCon 2018 talk](https://youtu.be/5zXAHh5tJqQ), organized pattern-by-pattern rather than slide-by-slide. For each pattern the talk discusses in Go, this version shows how it looks in [Bil](https://github.com/bil-lang/bil) — a variant of Go, built on the Go toolchain, that replaces goroutines-plus-buffered-channels with an occam-style Communicating Sequential Parallel model (`par`/`seq`/`alt`/`proc`, always-unbuffered channels, no `go` keyword) — and calls out the pros and cons of the Bil version against the original.
+This is a rewrite of Bryan C. Mills' [GopherCon 2018 talk](https://youtu.be/5zXAHh5tJqQ), organized pattern-by-pattern rather than slide-by-slide. For each pattern the talk discusses in Go, this version shows how it looks in [Bil](https://github.com/bil-lang/bil) — an extension to Go, built on the Go toolchain, that replaces goroutines-plus-buffered-channels with an occam-style Communicating Sequential Parallel model (`par`/`seq`/`alt`/`proc`, always-unbuffered channels, no `go` keyword) — and calls out the pros and cons of the Bil version against the original.
 
 The talk's own thesis is two rules, repeated at the start, middle, and end of the deck: **"Start goroutines when you have concurrent work"** and **"Share by communicating."** Bil's whole premise is taking those same two rules and making them compiler-enforced instead of idiomatic advice — there's no `go` statement to reach for out of habit, and the static checker rejects code that shares memory across `par` branches instead of trusting the author to have read the blog post. That's the thread running through every comparison below.
 

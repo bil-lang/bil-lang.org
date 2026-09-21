@@ -5,7 +5,7 @@ title: "Bil"
 author_profile: true
 ---
 
-**Bil**: a variant of Go for parallel processor systems.
+**Bil**: an extension to Go for parallel processor systems.
 
 Bil and Go both have concurrency models that are heavily inspired by Hoare's CSP.
 
