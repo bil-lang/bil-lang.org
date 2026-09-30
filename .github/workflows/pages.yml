@@ -42,6 +42,22 @@ jobs:
       - name: Update submodules to latest
         run: git submodule update --remote
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Check vendored JS libs
+        # vendor/marked and vendor/mermaid are hand-copied browser builds,
+        # not npm dependencies of the site itself -- this confirms they
+        # still match the pinned package.json versions and still actually
+        # parse markdown / render a diagram, so a bad or stale vendor
+        # copy fails the build here rather than shipping to the site.
+        run: |
+          npm ci
+          npm run vendor:check
+
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:

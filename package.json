@@ -1,0 +1,14 @@
+{
+  "name": "bil-lang-org",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "jsdom": "30.1.1",
+    "marked": "18.0.14",
+    "mermaid": "12.0.0"
+  },
+  "scripts": {
+    "vendor": "node scripts/vendor-libs.mjs",
+    "vendor:check": "node scripts/vendor-libs.mjs --check"
+  }
+}
