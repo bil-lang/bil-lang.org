@@ -56,6 +56,16 @@ exclude:
   - vendor/ruby/
   - external/
 
+# github-pages bundles jekyll-optional-front-matter, which auto-converts
+# any front-matter-less markdown file anywhere in the site into a themed
+# page (e.g. emulator/ex22/how-it-works.md, fetched as plain text by
+# emulator/index.html's own JS, was otherwise also spuriously rendered
+# at /emulator/ex22/how-it-works/). Every real page here already carries
+# explicit front matter, so disabling this plugin site-wide only removes
+# that stray behavior -- it changes nothing else.
+optional_front_matter:
+  enabled: false
+
 # Plugins (previously gems:)
 plugins:
   - jekyll-paginate

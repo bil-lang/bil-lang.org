@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <script src="coi-serviceworker.js"></script>
+<script src="../vendor/marked/marked.min.js"></script>
 <meta charset="utf-8">
 <title>Bil grid emulator</title>
 <link href="../vendor/fonts/fonts.css" rel="stylesheet">
@@ -64,6 +65,30 @@
     font-size:.62rem; line-height:1.35; color:var(--ink-dim);
     white-space:pre-wrap; word-break:break-word; flex:1;
   }
+  .detail{
+    max-width:52rem; margin-top:1.4rem; font-size:.85rem;
+    line-height:1.55; color:var(--ink-dim);
+  }
+  .detail:empty{margin-top:0;}
+  .detail h1{
+    font-family:var(--font-head); font-weight:700; font-size:1.1rem;
+    color:var(--ink); margin:0 0 .7rem;
+  }
+  .detail p{margin:0 0 .9rem;}
+  .detail ol{margin:0 0 .9rem; padding-left:1.3rem;}
+  .detail li{margin:0 0 .4rem;}
+  .detail *:last-child{margin-bottom:0;}
+  .detail code{
+    font-family:var(--font-mono); font-size:.82em; color:var(--accent-2);
+  }
+  .detail table{
+    border-collapse:collapse; margin:0 0 .9rem; font-size:.82rem;
+  }
+  .detail th, .detail td{
+    text-align:left; padding:.35rem .9rem .35rem 0;
+    border-bottom:1px solid var(--rule);
+  }
+  .detail th{color:var(--accent); font-weight:600; font-size:.72rem; letter-spacing:.03em;}
 </style>
 </head>
 <body>
@@ -91,6 +116,8 @@
   <svg id="linkSvg"></svg>
   <div id="nodeGrid"></div>
 </div>
+
+<div id="exampleDetail" class="detail"></div>
 
 <script>
   const BUF_BYTES = 128; // offset 0 = STATE, offset 1 = PAYLOAD (int32 words)
@@ -496,6 +523,10 @@
   // own base/ (roles/*.wasm + roles/placement.json) so the page's own
   // relative fetches ("roles/X.wasm", "roles/placement.json") just need
   // a base prefix -- see startGrid/startGridCascade above.
+  // Each example's longer "How it works" writeup lives in its own
+  // how-it-works.md alongside its roles/ (fetched at `${base}how-it-works.md`
+  // by updateExampleUI below) rather than inline here, so it's plain
+  // Markdown anyone can edit directly instead of a JS template string.
   const EXAMPLES = {
     ripple: {
       base: "ex10/", minRows: 1, defaultRows: 6, defaultCols: 7,
@@ -519,11 +550,33 @@
     return EXAMPLES[document.getElementById("exampleSelect").value];
   }
 
+  // Fetched once per example and cached here, keyed by base -- same
+  // vendored-per-example convention as roles/*.wasm, just Markdown
+  // instead of WASM. A stale in-flight fetch (selection changed again
+  // before it resolved) is dropped rather than overwriting newer content.
+  const detailCache = {};
+
+  async function loadExampleDetail(base) {
+    const detailEl = document.getElementById("exampleDetail");
+    if (base in detailCache) {
+      if (currentExample().base === base) detailEl.innerHTML = detailCache[base];
+      return;
+    }
+    let html = "";
+    try {
+      const res = await fetch(`${base}how-it-works.md`);
+      if (res.ok) html = marked.parse(await res.text());
+    } catch (e) { /* no writeup for this example -- leave it blank */ }
+    detailCache[base] = html;
+    if (currentExample().base === base) detailEl.innerHTML = html;
+  }
+
   function updateExampleUI() {
     const ex = currentExample();
     document.getElementById("exampleSub").innerHTML = ex.desc;
     document.getElementById("rowsInput").min = ex.minRows;
     if (clampInput("rowsInput") < ex.minRows) document.getElementById("rowsInput").value = ex.defaultRows;
+    loadExampleDetail(ex.base);
   }
 
   document.getElementById("exampleSelect").addEventListener("change", () => {
