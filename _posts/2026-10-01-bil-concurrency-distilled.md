@@ -6,7 +6,7 @@ Bil is Go with a different answer to one question:
 
 What if concurrency were part of the language instead of a library convention?
 
-Bil keeps Go’s types, structs, generics, control flow, and standard library. What changes is the concurrency model: par, alt, proc, seq, skip, and stop provide a small CSP/occam-inspired vocabulary for expressing concurrent programs. (GitHub)
+Bil keeps Go’s types, structs, generics, control flow, and standard library. What changes is the concurrency model: par, alt, proc, seq, skip, and stop provide a small CSP/occam-inspired vocabulary for expressing concurrent programs.
 
 If you know Go, most of Bil looks familiar.
 
