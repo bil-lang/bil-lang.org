@@ -14,25 +14,30 @@ The interesting part is everything that happens when two pieces of code need to 
 
 ⸻
 
-Running things concurrently
+### Running things concurrently
 
 In Go, you start a goroutine with go:
 
+```go
 go worker()
+```
 
-Bil doesn’t have go.
+Bil doesn’t have `go`.
 
-Instead, concurrency is expressed explicitly with par:
+Instead, concurrency is expressed explicitly with `par`:
 
+```go
 par {
     worker()
     worker()
 }
+```
 
 Both processes run concurrently, and the par block completes only when both have completed.
 
 For example:
 
+```go
 package main
 proc hello(name string) {
     println("hello", name)
@@ -44,6 +49,7 @@ func main() {
     }
     println("done")
 }
+```
 
 The two calls can execute concurrently.
 
@@ -51,21 +57,25 @@ done cannot be printed until both calls have finished.
 
 This is the basic Bil concurrency operation:
 
+```
        ┌── worker("alice") ──┐
 main ──┤                     ├── done
        └── worker("bob") ────┘
+```
 
 There is no goroutine handle to keep track of and no WaitGroup required for this simple fork/join case.
 
 ⸻
 
-proc
+### proc
 
 Bil introduces proc as the name for a process function:
 
+```go
 proc worker(id int) {
     println("worker", id)
 }
+```
 
 It behaves like a Go function for ordinary language purposes.
 
@@ -75,33 +85,44 @@ A process can communicate with another process through channels.
 
 ⸻
 
-Channels
+### chan
 
 A Bil channel is an unbuffered communication channel:
 
+```go
 c := make(chan int)
+```
 
-Unlike Go, buffered channels are not part of Bil’s concurrency model. A Bil channel represents a rendezvous between a sender and a receiver. (GitHub)
+Unlike Go, buffered channels are not part of Bil’s concurrency model. A Bil channel represents a rendezvous between a sender and a receiver.
 
 A sender writes using ordinary Go channel syntax:
 
+```go
 c <- 42
+```
 
 A receiver can use Bil’s left-to-right receive syntax:
 
+```go
 var x int
 c -> x
+```
 
 The latter means the same thing as:
 
+```go
 x = <-c
+```
 
 The Bil form makes communication read naturally as:
 
+```
 channel -> variable
+```
 
 For example:
 
+```go
 proc sender(c chan<- int) {
     c <- 42
 }
@@ -117,6 +138,7 @@ func main() {
         receiver(c)
     }
 }
+```
 
 The sender cannot complete its send until the receiver is ready.
 
@@ -126,37 +148,46 @@ The channel is therefore both a communication mechanism and a synchronization po
 
 ⸻
 
-Declare while receiving
+### short declaration
 
-Bil also provides :-> when the receiving variable should be declared at the receive:
+Bil also provides `:->` when the receiving variable should be declared at the receive:
 
+```go
 c :-> x
+```
 
 This is equivalent to:
 
+```go
 x := <-c
+```
 
-So these two forms have deliberately different meanings:
+So these two forms are equivalent:
 
+```go
 var x int
 c -> x
+```
 
 and:
 
+```go
 c :-> x
+```
 
 The first assigns to an existing variable.
 
 The second introduces a new variable.
 
-The distinction applies inside alt as well.
+The distinction applies inside `alt` as well.
 
 ⸻
 
-Two processes, one channel
+### Two processes, one channel
 
 Consider a producer and a consumer:
 
+```go
 proc producer(c chan<- int) {
     c <- 10
     c <- 20
@@ -178,6 +209,7 @@ func main() {
         consumer(c)
     }
 }
+```
 
 There is no shared queue between the processes.
 
@@ -185,81 +217,97 @@ The producer hands each value directly to the consumer.
 
 That gives us a useful mental model:
 
+```
 producer                 consumer
    10 ──────────────────────>
    20 ──────────────────────>
    30 ──────────────────────>
+```
 
 The channel establishes both communication and synchronization.
 
 ⸻
 
-Why the compiler cares
+### Why the compiler cares
 
 This is where Bil starts to differ substantially from ordinary Go.
 
-Bil’s static checker enforces rules about how channels and variables are used between parallel processes. (GitHub)
+Bil’s static checker enforces rules about how channels and variables are used between parallel processes.
 
 For example, a channel cannot simply be read by several branches of the same par and written by several others.
 
 The intended shape is:
 
+```
 one writer  ───── channel ───── one reader
+```
 
 This makes communication topology visible to the compiler.
 
-Instead of discovering certain races while running a program, Bil rejects a number of problematic sharing patterns during bil vet.
+Instead of discovering certain races while running a program, Bil rejects a number of problematic sharing patterns during `bil vet`.
 
 ⸻
 
-No go
+### No go
 
 This is worth stating explicitly:
 
+```go
 go worker()
+```
 
 is not Bil.
 
 Use:
 
+```go
 par {
     worker()
 }
+```
 
 For multiple independent workers:
 
+```go
 par {
     worker(0)
     worker(1)
     worker(2)
 }
+```
 
 And for a runtime-sized collection:
 
+```go
 par i := range n {
     worker(i)
 }
+```
 
 The latter is Bil’s replicated parallel construct.
 
 ⸻
 
-Replicated parallelism
+### Replicated parallelism
 
 Suppose we want ten workers:
 
+```go
 const n = 10
 par i := range n {
     worker(i)
 }
+```
 
 This is roughly:
 
+```go
 worker(0)
 worker(1)
 worker(2)
 ...
 worker(9)
+```
 
 running concurrently.
 
@@ -267,6 +315,7 @@ It is particularly useful when the number of processes is known from a runtime v
 
 For example:
 
+```go
 proc worker(id int) {
     println("worker", id)
 }
@@ -276,31 +325,36 @@ func main() {
         worker(i)
     }
 }
+```
 
 The par block waits for all four workers.
 
 ⸻
 
-Worker farms
+### Worker farms
 
 A common concurrency pattern is a collection of independent workers.
 
 Give every worker its own input and output channel:
 
+```go
 const n = 4
 proc worker(in <-chan int, out chan<- int) {
-    var x int
-    in -> x
+    in :-> x
     out <- x * x
 }
+```
 
 Create the channels:
 
+```go
 toWorker := makeChans[int](n)
 fromWorker := makeChans[int](n)
+```
 
 Then start the workers:
 
+```go
 par {
     par i := range n {
         worker(toWorker[i], fromWorker[i])
@@ -314,9 +368,11 @@ par {
         }
     }
 }
+```
 
 The structure is:
 
+```
              ┌── worker 0 ──┐
              │              │
 input ───────┼── worker 1 ──┼──── output
@@ -324,20 +380,23 @@ input ───────┼── worker 1 ──┼──── output
              ├── worker 2 ──┤
              │              │
              └── worker 3 ──┘
+```
 
-makeChans[T](n) creates a slice of n channels and is provided by Bil. (GitHub)
+`makeChans[T](n)` creates a slice of n channels and is provided by Bil.
 
 ⸻
 
-seq
+### seq
 
-Bil also has seq:
+Bil also has `seq`:
 
+```go
 seq {
     step1()
     step2()
     step3()
 }
+```
 
 In ordinary Go, statements already execute sequentially.
 
@@ -347,6 +406,7 @@ Because Bil’s concurrency notation is deliberately explicit.
 
 When a program contains nested process structures, seq makes the intended execution structure obvious:
 
+```go
 par {
     seq {
         prepare()
@@ -355,32 +415,38 @@ par {
     }
     worker()
 }
+```
 
 Read it as:
 
+```
           ┌── prepare → send → finish ──┐
 main ─────┤                              ├── join
           └── worker ───────────────────┘
+```
 
-seq is mostly structural clarity in Bil rather than a new execution mechanism. (GitHub)
+`se`q is mostly structural clarity in Bil rather than a new execution mechanism.
 
 ⸻
 
-Waiting for one of several things
+### Waiting for one of several things
 
 Fork/join is useful, but concurrent programs often need another operation:
 
 Wait for whichever communication becomes available first.
 
-That’s what alt does.
+That’s what `alt` does.
 
 Consider two channels:
 
+```go
 left := make(chan int)
 right := make(chan int)
+```
 
 We can wait on either:
 
+```go
 var x int
 alt {
     left -> x {
@@ -390,6 +456,7 @@ alt {
         println("right:", x)
     }
 }
+```
 
 If left is ready first, the first branch runs.
 
@@ -399,18 +466,21 @@ The process blocks until at least one guard can proceed.
 
 Conceptually:
 
+```
                   ┌── left ready  ──> branch 1
 wait ── alt ──────┤
                   └── right ready ──> branch 2
+```
 
 This is the core of Bil’s event-driven concurrency model.
 
 ⸻
 
-Conditional guards
+### Conditional guards
 
-An alt branch can also be conditional:
+An `alt` branch can also be conditional:
 
+```go
 alt {
     (enabled) && left -> x {
         println("left", x)
@@ -419,6 +489,7 @@ alt {
         println("right", y)
     }
 }
+```
 
 The first branch participates only when enabled is true.
 
@@ -426,12 +497,13 @@ This is useful when the set of events a process is willing to handle changes ove
 
 ⸻
 
-skip
+### skip
 
-Sometimes we want an alt to have a default action rather than block.
+Sometimes we want an `alt` to have a default action rather than block.
 
-Use skip:
+Use `skip`:
 
+```go
 alt {
     c -> x {
         println("received", x)
@@ -440,32 +512,38 @@ alt {
         println("nothing available")
     }
 }
+```
 
 skip is immediately ready.
 
 Therefore this behaves like a non-blocking poll:
 
+```
 if c has a value:
     receive it
 else:
     run the skip branch
+```
 
 Unlike a normal if, however, the communication guard remains part of the concurrency structure.
 
 ⸻
 
-stop
+### stop
 
 stop terminates the current process permanently:
 
+```
 if done {
     stop
 }
+```
 
 It is particularly useful in process pipelines.
 
 For example:
 
+```go
 proc worker(c <-chan int) {
     for {
         c :-> x
@@ -475,6 +553,7 @@ proc worker(c <-chan int) {
         println(x)
     }
 }
+```
 
 A negative value is being used here as a protocol-level termination signal.
 
@@ -482,10 +561,11 @@ The worker does not return to its caller. It terminates the process.
 
 ⸻
 
-alt and termination
+### alt and termination
 
 A process can combine communication and termination:
 
+```go
 proc worker(c <-chan int) {
     for {
         alt {
@@ -502,21 +582,23 @@ proc worker(c <-chan int) {
         time.Sleep(100 * time.Millisecond)
     }
 }
+```
 
 The channel branch handles work.
 
-The skip branch provides a default action.
+The `skip` branch provides a default action.
 
-stop provides the termination path.
+`stop` provides the termination path.
 
 ⸻
 
-Priority choice
+### Priority choice
 
 Sometimes several guards are ready and the program needs a defined priority.
 
 Bil provides:
 
+```go
 pri alt {
     highPriority -> x {
         handleHigh(x)
@@ -525,6 +607,7 @@ pri alt {
         handleLow(y)
     }
 }
+```
 
 With ordinary alt, the scheduler chooses among ready alternatives according to the construct’s selection semantics.
 
@@ -532,35 +615,42 @@ With pri alt, guards are considered in priority order.
 
 So:
 
+```
 pri alt {
     A
     B
     C
 }
+```
 
 means:
 
+```
 if A is ready: choose A
 else if B is ready: choose B
 else if C is ready: choose C
 else wait
+```
 
 This is useful for protocols where some events must take precedence over others.
 
 ⸻
 
-Pipelines
+### Pipelines
 
 Channels become particularly useful when processes are connected into a pipeline.
 
 Imagine:
 
+```
 generator → filter → filter → filter → output
+```
 
 Each stage is an independent process.
 
 A simplified Bil pipeline looks like this:
 
+```go
 proc generator(out chan<- int) {
     for v := 2; v <= 30; v++ {
         out <- v
@@ -578,23 +668,29 @@ proc filter(in <-chan int, out chan<- int) {
         }
     }
 }
+```
 
 Create the channels:
 
+```go
 const n = 10
 channels := makeChans[int](n + 1)
+```
 
 Then connect the stages:
 
+```go
 par {
     generator(channels[0])
     par i := range n {
         filter(channels[i], channels[i+1])
     }
 }
+```
 
 The resulting topology is:
 
+```
 generator
     │
     ▼
@@ -607,6 +703,7 @@ generator
  filter
     │
    ...
+```
 
 Each process owns its place in the pipeline.
 
@@ -616,10 +713,11 @@ Communication is explicit in the channel graph.
 
 ⸻
 
-Channel direction
+### Channel direction
 
 As in Go, channel parameters can express direction:
 
+```go
 proc producer(out chan<- int) {
     out <- 42
 }
@@ -627,6 +725,7 @@ proc consumer(in <-chan int) {
     var x int
     in -> x
 }
+```
 
 The producer cannot receive from out.
 
@@ -638,24 +737,31 @@ For concurrent programs, that is valuable because the communication topology is 
 
 ⸻
 
-Closing channels
+### Closing channels
 
 Bil retains Go’s channel closing mechanism:
 
+```go
 close(c)
+```
 
 And Bil supports the comma-ok receive form:
 
+```go
 c -> x, ok
+```
 
 or:
 
+```go
 c :-> x, ok
+```
 
 The latter declares both values.
 
 For example:
 
+```go
 proc consumer(c <-chan int) {
     for {
         c :-> x, ok
@@ -665,43 +771,48 @@ proc consumer(c <-chan int) {
         println(x)
     }
 }
+```
 
 ok becomes false when the channel is closed and drained.
 
-This is one of the places where Bil deliberately retains Go semantics rather than copying occam exactly. (GitHub)
-
 ⸻
 
-Shared variables
+### Shared variables
 
-Bil’s most important difference from conventional Go concurrency is that it does not encourage arbitrary shared-memory communication between parallel processes.
+Bil’s most important difference from conventional Go concurrency is that it discourages arbitrary shared-memory communication between parallel processes.
 
 For example, this pattern is problematic:
 
+```go
 var counter int
 par {
     counter++
     println(counter)
 }
+```
 
 The issue isn’t merely that counter++ is not atomic.
 
 The deeper issue is that two concurrent processes are sharing mutable state.
 
-Bil’s checker applies restrictions to variables captured by parallel branches. A variable written by one branch cannot simply be read from another branch. (GitHub)
+Bil’s checker applies restrictions to variables captured by parallel branches. A variable written by one branch cannot simply be read from another branch.
 
 Instead, use communication.
 
 For example:
 
+```go
 proc increment(in <-chan int, out chan<- int) {
     in :-> x
     out <- x + 1
 }
+```
 
 Now the state transition is explicit:
 
+```
 input → process → output
+```
 
 ⸻
 
@@ -724,65 +835,79 @@ This is an important difference in programming style.
 
 Instead of:
 
+```
              ┌── goroutine A ──┐
 shared map ──┤                 ├── concurrent access
              └── goroutine B ──┘
+```
 
 prefer:
 
+```
              ┌── process A ──┐
 message ─────┤               ├── message
              └── process B ──┘
+```
 
 The channel becomes the boundary.
 
 ⸻
 
-Parallel writes to arrays and slices
+### Parallel writes to arrays and slices
 
-Bil does allow parallel work over independent pieces of an array or slice when the checker can prove that the regions do not overlap.
+Bil does allow parallel work over independent pieces of an array when the regions do not overlap.
 
 The easiest way to express this is with splitN.
 
 Suppose we want four workers to process a slice:
 
+```go
 parts := splitN(data, 4)
+```
 
 Then:
 
+```go
 par i := range 4 {
     process(parts[i])
 }
+```
 
-Each worker receives a disjoint chunk.
+Each worker receives a disjoint part.
 
 The distinction matters:
 
+```
 data
 ├────────┬────────┬────────┬────────┤
  worker0 worker1  worker2  worker3
+```
 
 rather than:
 
+```
 data
 └────── shared mutable object ──────┘
+```
 
-splitN2D provides the corresponding operation for two-dimensional data. (GitHub)
+splitN2D provides the corresponding operation for two-dimensional data (or you can make your own).
 
 ⸻
 
-A parallel map
+### A parallel map
 
 Suppose we want to square every element.
 
 With a suitable split:
 
+```go
 parts := splitN(values, 4)
 par i := range 4 {
     for j := range parts[i] {
         parts[i][j] *= parts[i][j]
     }
 }
+```
 
 The workers operate on disjoint regions.
 
@@ -792,14 +917,15 @@ It is that the compiler can establish that the workers do not interfere.
 
 ⸻
 
-Timeouts
+### Timeouts
 
-Bil retains Go’s time package.
+Bil retains Go’s `time` package.
 
-That means time can participate in an alt.
+That means `time` can participate in an `alt`.
 
 For example:
 
+```go
 proc waitForData(c <-chan int) {
     timeout := time.After(time.Second)
     alt {
@@ -811,18 +937,21 @@ proc waitForData(c <-chan int) {
         }
     }
 }
+```
 
 This gives us the familiar shape:
 
+```
                  ┌── data arrives ──> handle data
 wait ── alt ─────┤
                  └── timer fires ───> timeout
+```
 
-Bil has a specific exception to its channel-sharing rule for time channels such as those returned by time.After; they may be read by multiple par branches. (GitHub)
+Bil has a specific exception to its channel-sharing rule for `time` channels; they may be read by multiple par branches.
 
 ⸻
 
-Tagged messages
+### Tagged messages
 
 Sometimes a channel needs to carry different kinds of messages.
 
@@ -830,12 +959,15 @@ Go interfaces work naturally for this.
 
 Define a marker interface:
 
+```go
 type Message interface {
     isMessage()
 }
+```
 
 Then define variants:
 
+```go
 type Info struct {
     Code int
 }
@@ -844,16 +976,20 @@ type Warning struct {
     Code int
 }
 func (Warning) isMessage() {}
+```
 
 Send them through one channel:
 
+```go
 proc sender(out chan<- Message) {
     out <- Info{Code: 1}
     out <- Warning{Code: 2}
 }
+```
 
 And dispatch on the receiver:
 
+```go
 proc receiver(in <-chan Message) {
     for range 2 {
         switch in :-> v.(type) {
@@ -864,23 +1000,27 @@ proc receiver(in <-chan Message) {
         }
     }
 }
+```
 
 The channel now carries a protocol:
 
+```
 Message
 ├── Info
 └── Warning
+```
 
-Bil does not introduce a separate protocol declaration for this. It uses Go’s existing type system and type switches. (GitHub)
+Bil protocols use Go’s existing type system and type switches.
 
 ⸻
 
-Communication is the architecture
+### Communication is the architecture
 
 At this point, the recurring pattern should be visible.
 
 A Bil concurrent program tends to look like:
 
+```
           ┌──────────────┐
           │   process    │
           └──────┬───────┘
@@ -896,6 +1036,7 @@ A Bil concurrent program tends to look like:
           ┌──────▼───────┐
           │   process    │
           └──────────────┘
+```
 
 Rather than putting locks around a shared data structure, you can make the data flow itself the synchronization mechanism.
 
@@ -911,10 +1052,11 @@ This is particularly natural for:
 
 ⸻
 
-A small state machine
+### A small state machine
 
 Consider a process that accepts commands:
 
+```go
 type Command interface {
     isCommand()
 }
@@ -926,9 +1068,11 @@ type Value struct {
     N int
 }
 func (Value) isCommand() {}
+```
 
 The process can then select messages:
 
+```go
 proc machine(in <-chan Command) {
     running := false
     for {
@@ -945,6 +1089,7 @@ proc machine(in <-chan Command) {
         }
     }
 }
+```
 
 The state belongs to one process.
 
@@ -956,13 +1101,15 @@ That is often a cleaner concurrency boundary than sharing the state between goro
 
 ⸻
 
-Backpressure comes for free
+### Backpressure comes for free
 
 Because Bil channels are unbuffered, a sender and receiver rendezvous.
 
 Consider:
 
+```
 producer -> channel -> consumer
+```
 
 If the consumer is slow, the producer eventually waits.
 
@@ -974,12 +1121,13 @@ This can be useful when designing streaming systems because the flow-control rel
 
 ⸻
 
-Fan-out
+### Fan-out
 
 One producer can distribute work to several workers.
 
 For example:
 
+```
                  ┌── worker 0
                  │
 producer ────────┼── worker 1
@@ -987,6 +1135,7 @@ producer ────────┼── worker 1
                  ├── worker 2
                  │
                  └── worker 3
+```
 
 With Bil, a common implementation is to give each worker its own channel and explicitly decide how work is distributed.
 
@@ -994,17 +1143,20 @@ That keeps the channel topology visible and allows the compiler to check the ind
 
 ⸻
 
-Fan-in
+### Fan-in
 
 The reverse is also useful:
 
+```
 worker 0 ──┐
 worker 1 ──┤
 worker 2 ──┼──> collector
 worker 3 ──┘
+```
 
-A collector can use alt to wait for whichever worker produces a result next:
+A collector can use `alt` to wait for whichever worker produces a result next:
 
+```go
 alt {
     results[0] -> x {
         handle(x)
@@ -1016,34 +1168,40 @@ alt {
         handle(z)
     }
 }
+```
 
 For runtime-sized collections, replicated alt can express the same idea more compactly:
 
+```go
 alt i := range n {
     results[i] -> x {
         handle(i, x)
     }
 }
+```
 
-This is particularly useful when the number of channels is determined dynamically. (GitHub)
+This is particularly useful when the number of channels is determined dynamically.
 
 ⸻
 
-alt is more than select
+### alt is more than select
 
-Go programmers will recognize the resemblance between alt and select.
+Go programmers will recognize the resemblance between `alt` and `select`.
 
 For example, Go:
 
+```go
 select {
 case x := <-left:
     handle(x)
 case y := <-right:
     handle(y)
 }
+```
 
 Bil:
 
+```go
 alt {
     left :-> x {
         handle(x)
@@ -1052,16 +1210,17 @@ alt {
         handle(y)
     }
 }
+```
 
 But Bil’s concurrency model goes beyond a single syntactic replacement.
 
-par, replicated par, alt, replicated alt, pri alt, skip, and stop form a coherent process-oriented vocabulary.
+`par`, replicated `par[i]`, `alt`, replicated `alt[i]`, `pri alt`, `skip`, and `stop` form a coherent process-oriented vocabulary.
 
 The constructs are designed to describe the structure of concurrent execution rather than merely provide primitives for launching goroutines.
 
 ⸻
 
-What Bil deliberately does not provide
+### What Bil deliberately does not provide
 
 Bil does not turn every Go concurrency technique into a Bil technique.
 
@@ -1069,12 +1228,12 @@ In particular, the language is intentionally restrictive around shared state.
 
 A Go programmer might reach for:
 
-mutex
-atomic
-shared map
-WaitGroup
-goroutine
-buffered channel
+* mutex
+* atomic
+* shared map
+* WaitGroup
+* goroutine
+* buffered channel
 
 Bil asks a different question first:
 
@@ -1084,6 +1243,7 @@ Often the answer is yes.
 
 For example, instead of:
 
+```
 many workers
       │
       ▼
@@ -1091,11 +1251,14 @@ shared map
       ▲
       │
 many workers
+```
 
 you might create an owner process:
 
+```
 worker ──request──> map owner
 worker <──response── map owner
+```
 
 Only one process owns the mutable map.
 
@@ -1105,7 +1268,7 @@ This is a classic process-and-channel design.
 
 ⸻
 
-The compiler becomes part of the concurrency model
+### The compiler becomes part of the concurrency model
 
 The important difference between Bil and a library-based concurrency style is that these rules are not merely recommendations.
 
@@ -1117,10 +1280,11 @@ Bil’s static checker rejects violations such as:
 * unsafe sharing of pointers, maps, and interfaces
 * overlapping parallel writes
 
-The goal is to make the communication structure statically visible. (GitHub)
+The goal is to make the communication structure statically visible.
 
 So a useful workflow is:
 
+```
 write
   ↓
 bil vet
@@ -1128,15 +1292,17 @@ bil vet
 fix the communication topology
   ↓
 bil run
+```
 
 Concurrency correctness becomes partly a compile-time property.
 
 ⸻
 
-A complete example
+### A complete example
 
 Here is a small worker pipeline combining several of the ideas:
 
+```go
 package main
 const workers = 4
 proc worker(in <-chan int, out chan<- int) {
@@ -1168,6 +1334,7 @@ proc main() {
         }
     }
 }
+```
 
 The exact topology matters more than the arithmetic.
 
@@ -1185,12 +1352,15 @@ The mental model
 
 If you come from Go, it is tempting to think:
 
+```
 Go
  └── goroutines
       └── channels
+```
 
 A better mental model for Bil is:
 
+```
 Bil
  ├── processes
  │    └── par
@@ -1204,69 +1374,83 @@ Bil
  └── termination
       ├── skip
       └── stop
+```
 
 The pieces fit together.
 
-par says what can run concurrently.
+`par` says what can run concurrently.
 
-Channels say how concurrent processes communicate.
+`chan`s say how concurrent processes communicate.
 
-alt says which communication to accept next.
+`alt` says which communication to accept next.
 
-skip says what to do when no communication is required.
+`skip` says what to do when no communication is required.
 
-stop says this process is finished permanently.
+`stop` says this process is finished permanently.
 
 And the static checker says which communication structures are legal.
 
 ⸻
 
-From Go to Bil
+### From Go to Bil
 
 The translation is therefore not:
 
+```
 goroutine → Bil keyword
+```
 
 It is a change in how concurrency is structured.
 
 Go encourages:
 
+```go
 go worker()
+```
 
 Bil encourages:
 
+```go
 par {
     worker()
     otherWorker()
 }
+```
 
 Go often uses shared memory plus synchronization:
 
+```
 shared state
     +
 mutex
     +
 goroutines
+```
 
 Bil encourages:
 
+```
 process
     +
 channel
     +
 process
+```
 
-Go’s select becomes Bil’s alt:
+Go’s `select` becomes Bil’s `alt`:
 
+```go
 select {
 case x := <-a:
     ...
 case y := <-b:
     ...
 }
+```
 
 becomes:
 
+```go
 alt {
     a :-> x {
         ...
@@ -1275,31 +1459,36 @@ alt {
         ...
     }
 }
+```
 
 And when the concurrency structure gets larger, Bil gives you replicated constructs:
 
+```go
 par i := range n {
     worker(i)
 }
+```
 
 and:
 
+```go
 alt i := range n {
     channels[i] -> x {
         handle(i, x)
     }
 }
+```
 
 The result is a language where concurrency is expressed as a topology of processes and communication rather than as a collection of independently launched goroutines.
 
 ⸻
 
-In one sentence
+### In one sentence
 
 Bil’s concurrency model can be reduced to a simple idea:
 
-Run processes in parallel, make them communicate through channels, and let the compiler enforce the boundaries.
+_Run processes in parallel, make them communicate through channels, and let the compiler enforce the boundaries._
 
-Once that model clicks, par, alt, proc, seq, skip, and stop stop looking like unusual syntax.
+Once that model clicks, `par`, `alt`, `proc`, `seq`, `skip`, and `stop` cease to look like unusual syntax.
 
 They become the vocabulary for describing concurrent programs.
