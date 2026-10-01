@@ -1,5 +1,7 @@
 Bil concurrency distilled
 
+_This post was heavily inspired by [Go concurrency distilled](https://antonz.org/go-concurrency-distilled/) by [Anton Zhiyanov] which I highly recommend as pre-reading as a refresher for baseline Go concurrency, before studying Bil. I have used AI heavily._
+
 Bil is Go with a different answer to one question:
 
 What if concurrency were part of the language instead of a library convention?
